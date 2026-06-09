@@ -1,0 +1,2948 @@
+@using System.Security.Claims
+@using System.Text.Json
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Helpers
+@using Microsoft.AspNetCore.Components.Web
+@inject MessageService MsgService
+@inject MessageCacheService MessageCache
+@inject ConversationService ConvService
+@inject ReactionService ReactionService
+@inject SavedMessageService SavedMessageService
+@inject ChatHubService Hub
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject ReadReceiptService ReadReceiptService
+@inject GroupService GroupService
+@inject IDialogService DialogService
+@inject LocalizationService Loc
+@implements IDisposable
+
+<div style="height:100%; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:2px; background:var(--mud-palette-background);"
+     id="msgScroll">
+
+    @if (_loading && !messages.Any())
+    {
+        <div class="pm-message-skeleton-list">
+            @for (var i = 0; i < 8; i++)
+            {
+                <div class="@($"pm-message-skeleton {(i % 3 == 0 ? "own" : "other")}")">
+                    <span></span>
+                    <span></span>
+                </div>
+            }
+        </div>
+    }
+    else if (!messages.Any())
+    {
+        <div class="pm-empty" style="flex:1;">
+            <MudIcon Icon="@Icons.Material.Outlined.ChatBubbleOutline"
+                     Style="font-size:64px;opacity:.25;color:var(--mud-palette-primary);" />
+            <p class="pm-empty-title">Chưa có tin nhắn nào</p>
+            <p class="pm-empty-desc">Hãy gửi tin nhắn đầu tiên để bắt đầu cuộc trò chuyện</p>
+        </div>
+    }
+    else
+    {
+        @if (_hasMore)
+        {
+            <div style="text-align:center;padding:8px;">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="LoadMoreAsync">
+                    Tải thêm tin nhắn
+                </MudButton>
+            </div>
+        }
+
+        @foreach (var msg in VisibleMessages)
+        {
+            if (IsSystemMessage(msg))
+            {
+                <div @key="msg.Id" id="msg-@msg.Id" class="pm-system-message-row">
+                    <span class="pm-system-message-text">@msg.Content</span>
+                </div>
+                continue;
+            }
+
+            if (string.Equals(msg.MessageType, "Call", StringComparison.OrdinalIgnoreCase))
+            {
+                var isMissed = msg.Content?.Contains("Missed", StringComparison.OrdinalIgnoreCase) == true || msg.Content?.Contains("declined", StringComparison.OrdinalIgnoreCase) == true;
+                var isVideo = msg.Content?.Contains("video", StringComparison.OrdinalIgnoreCase) == true;
+                var callIcon = isVideo ? (isMissed ? Icons.Material.Filled.MissedVideoCall : Icons.Material.Filled.Videocam) : (isMissed ? Icons.Material.Filled.PhoneMissed : Icons.Material.Filled.Phone);
+                var callColor = isMissed ? "var(--mud-palette-error)" : "var(--mud-palette-text-secondary)";
+
+                <div @key="msg.Id" id="msg-@msg.Id" class="pm-system-message-row">
+                    <div class="pm-call-log-bubble" style="display:inline-flex; align-items:center; gap:8px; background:var(--mud-palette-background-grey); padding:8px 16px; border-radius:16px; margin: 4px 0;">
+                        <MudIcon Icon="@callIcon" Style="@($"color:{callColor}; font-size:1.2rem;")" />
+                        <span style="font-size:0.85rem; font-weight:500; color:var(--mud-palette-text-primary);">@msg.Content</span>
+                    </div>
+                </div>
+                continue;
+            }
+
+            var isOwn = msg.SenderId == CurrentUserId;
+            var senderName = GetSenderDisplayName(msg);
+
+            <div @key="msg.Id"
+                 id="msg-@msg.Id"
+                 class="pm-message-row @(isOwn ? "d-flex flex-column align-end mb-1" : "d-flex flex-column align-start mb-1") @(_highlightMessageId == msg.Id ? "pm-message-highlight" : "")">
+
+                @if (!isOwn && GroupId.HasValue && !msg.IsDeleted)
+                {
+                    <MudText Typo="Typo.caption"
+                             Style="color:var(--mud-palette-primary);font-weight:600;margin:0 44px 2px;">
+                        @senderName
+                    </MudText>
+                }
+
+                <div class="@($"pm-message-line {(isOwn ? "own" : "other")}")">
+                    @if (!isOwn)
+                    {
+                        var senderAvatarUrl = UrlHelper.BuildBackendUrl(msg.SenderAvatarUrl, _avatarVersion);
+
+                        <MudAvatar Size="Size.Small"
+                                   Color="Color.Primary"
+                                   Style="width:32px;height:32px;font-size:.8rem;flex-shrink:0;">
+                            <span class="pm-avatar-fallback">@senderName.FirstOrDefault()</span>
+                            @if (!string.IsNullOrWhiteSpace(senderAvatarUrl))
+                            {
+                                <img src="@senderAvatarUrl"
+                                     alt="@senderName"
+                                     class="pm-avatar-image"
+                                     loading="lazy"
+                                     decoding="async"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.style.display='none';this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                            }
+                        </MudAvatar>
+                    }
+
+                    <div style="display:flex;flex-direction:column;@(isOwn ? "align-items:flex-end;" : "align-items:flex-start;")">
+                        @if (msg.ReplyToMessage != null)
+                        {
+                            <div class="pm-reply-preview" style="@(isOwn ? "margin-right:4px;" : "margin-left:4px;")">
+                                <span class="author">@GetSenderDisplayName(msg.ReplyToMessage)</span>
+                                <br />
+                                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:200px;">
+                                    @msg.ReplyToMessage.Content
+                                </span>
+                            </div>
+                        }
+
+                        @if (msg.ForwardedFromMessageId.HasValue && !msg.IsDeleted)
+                        {
+                            <div class="pm-forwarded-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Forward"
+                                         Style="font-size:13px;vertical-align:-2px;margin-right:3px;" />
+                                Đã chuyển tiếp
+                            </div>
+                        }
+
+                        <div class="@($"pm-bubble {(isOwn ? "own" : "other")} {(msg.IsDeleted ? "deleted" : "")}")"
+                             style="position:relative;">
+
+                            @if (msg.IsPinned && !msg.IsDeleted)
+                            {
+                                <div class="pm-pin-badge" title="Tin nhắn đã ghim">
+                                    <MudIcon Icon="@Icons.Material.Filled.PushPin"
+                                             Style="font-size:13px;color:#F59E0B;" />
+                                </div>
+                            }
+
+                            @if (msg.IsDeleted)
+                            {
+                                <span>🚫 Tin nhắn đã thu hồi</span>
+                            }
+                            else
+                            {
+                                @if (msg.Attachments.Any())
+                                {
+                                    <div class="pm-attachments">
+                                        @foreach (var att in msg.Attachments)
+                                        {
+                                            if (att.IsImage)
+                                            {
+                                                <div class="pm-image-link" @onclick="() => OpenImageViewer(att)">
+                                                    <img src="@att.FileUrl"
+                                                         alt="@att.FileName"
+                                                         loading="lazy"
+                                                         decoding="async"
+                                                         class="pm-image-preview" />
+                                                </div>
+
+                                                <div class="pm-attachment-caption">
+                                                    <span>@att.FileName</span>
+                                                    <span>@att.DisplaySize</span>
+                                                </div>
+                                            }
+                                            else if (att.IsAudio)
+                                            {
+                                                <div class="pm-audio-player">
+                                                    <audio controls src="@att.FileUrl" preload="metadata" style="max-width:240px;height:40px;"></audio>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="pm-file-wrapper">
+                                                    <div class="pm-file-card">
+                                                        <div class="pm-file-icon">
+                                                            <MudIcon Icon="@Icons.Material.Filled.InsertDriveFile"
+                                                                     Style="font-size:22px;" />
+                                                        </div>
+
+                                                        <div class="pm-file-info">
+                                                            <span class="pm-file-name">@att.FileName</span>
+                                                            <span class="pm-file-meta">@att.DisplaySize • @att.MimeType</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="pm-file-actions">
+                                                        <a href="@GetDownloadUrl(att)"
+                                                           download="@att.FileName"
+                                                           class="pm-file-action-btn primary">
+                                                            Tải xuống
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+
+                                @if (IsReminderMessage(msg))
+                                {
+                                    @RenderReminderCard(msg)
+                                }
+                                else if (IsTaskMessage(msg))
+                                {
+                                    @RenderTaskCard(msg)
+                                }
+                                else if (IsVulnerabilityMessage(msg))
+                                {
+                                    @RenderVulnerabilityCard(msg)
+                                }
+                                else if (ShouldRenderTextContent(msg))
+                                {
+                                    @if (MarkdownHelper.ContainsMarkdown(msg.Content))
+                                    {
+                                        <div class="pm-markdown-body @(MarkdownHelper.IsIocCommand(msg.Content) ? "pm-ioc-message" : "")">
+                                            @RenderMarkdown(msg)
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="pm-message-text">@msg.Content</span>
+                                    }
+                                }
+                            }
+                        </div>
+
+                        @if (msg.Reactions != null && msg.Reactions.Any())
+                        {
+                            <div class="pm-reactions">
+                                @foreach (var r in msg.Reactions)
+                                {
+                                    <button type="button"
+                                            class="@($"pm-reaction-pill {(r.UserIds.Contains(CurrentUserId) ? "mine" : "")}")"
+                                            @onclick="() => ReactAsync(msg.Id, r.Emoji)">
+                                        <span>@r.Emoji</span>
+                                        <span class="count">@r.Count</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <div class="pm-msg-time" style="@(isOwn ? "text-align:right;" : "")">
+                            @msg.CreatedAt.ToLocalTime().ToString("HH:mm")
+
+                            @if (msg.IsEdited && !msg.IsDeleted)
+                            {
+                                <span style="margin-left:4px;opacity:.72;">
+                                    đã sửa
+                                    <MudIconButton Icon="@Icons.Material.Filled.History"
+                                                Size="Size.Small"
+                                                OnClick="() => ShowEditHistory(msg.Id)"
+                                                Style="margin-left:4px; width:22px; height:22px;" />
+                                </span>
+                            }
+
+                            @if (isOwn && IsReadByOther(msg))
+                            {
+                                <MudTooltip Text="Đã xem">
+                                    <MudIcon Icon="@Icons.Material.Filled.DoneAll"
+                                             Style="font-size:12px;color:#3B82F6;margin-left:2px;vertical-align:middle;" />
+                                </MudTooltip>
+                            }
+                            else if (isOwn)
+                            {
+                                <MudTooltip Text="Đã gửi">
+                                    <MudIcon Icon="@Icons.Material.Filled.Done"
+                                             Style="font-size:12px;opacity:.65;margin-left:2px;vertical-align:middle;" />
+                                </MudTooltip>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!msg.IsDeleted)
+                    {
+                        <div class="@($"pm-message-actions {(isOwn ? "own" : "other")} {(_reactionPickerMessageId == msg.Id ? "show" : "")}")">
+                            <MudTooltip Text="Trả lời">
+                                <MudIconButton Icon="@Icons.Material.Filled.Reply"
+                                               Size="Size.Small"
+                                               OnClick="() => OnReply.InvokeAsync(msg)"
+                                               Style="width:28px;height:28px;" />
+                            </MudTooltip>
+
+                            <MudTooltip Text="Chuyển tiếp">
+                                <MudIconButton Icon="@Icons.Material.Filled.Forward"
+                                               Size="Size.Small"
+                                               OnClick="() => OpenForwardDialogAsync(msg)"
+                                               Style="width:28px;height:28px;" />
+                            </MudTooltip>
+
+                            <MudTooltip Text="@(msg.IsPinned ? "Bỏ ghim" : "Ghim tin nhắn")">
+                                <MudIconButton Icon="@(msg.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)"
+                                               Size="Size.Small"
+                                               Color="@(msg.IsPinned ? Color.Warning : Color.Default)"
+                                               OnClick="() => TogglePinAsync(msg)"
+                                               Style="width:28px;height:28px;" />
+                            </MudTooltip>
+
+                            <MudTooltip Text="@(msg.IsSaved ? Loc.T("message.unsave") : Loc.T("message.save"))">
+                                <MudIconButton Icon="@(msg.IsSaved ? Icons.Material.Filled.Bookmark : Icons.Material.Outlined.BookmarkBorder)"
+                                               Size="Size.Small"
+                                               Color="@(msg.IsSaved ? Color.Primary : Color.Default)"
+                                               OnClick="() => ToggleSaveAsync(msg)"
+                                               Style="width:28px;height:28px;" />
+                            </MudTooltip>
+
+                            @if (isOwn && msg.MessageType.Equals("Text", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudTooltip Text="Chỉnh sửa">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Size="Size.Small"
+                                                   OnClick="() => StartEdit(msg)"
+                                                   Style="width:28px;height:28px;" />
+                                </MudTooltip>
+                            }
+                            @if (isOwn || _canModerateCurrentGroup)
+                            {
+                                <MudTooltip Text="Thu hồi">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="() => DeleteAsync(msg.Id)"
+                                                   Style="width:28px;height:28px;" />
+                                </MudTooltip>
+                            }
+
+                            <div class="pm-reaction-picker-wrap" @onclick:stopPropagation="true">
+                                <MudTooltip Text="Thả reaction">
+                                    <MudIconButton Icon="@Icons.Material.Filled.EmojiEmotions"
+                                                   Size="Size.Small"
+                                                   OnClick="() => ToggleReactionPicker(msg.Id)"
+                                                   Style="width:28px;height:28px;" />
+                                </MudTooltip>
+
+                                @if (_reactionPickerMessageId == msg.Id)
+                                {
+                                    <div class="@($"pm-reaction-picker {(isOwn ? "own" : "other")}")">
+                                        @foreach (var emoji in ReactionEmojis)
+                                        {
+                                            var selectedEmoji = emoji;
+                                            var msgId = msg.Id;
+
+                                            <button type="button"
+                                                    class="pm-reaction-picker-btn"
+                                                    title="@selectedEmoji"
+                                                    @onclick="() => ReactFromMenuAsync(msgId, selectedEmoji)"
+                                                    @onclick:stopPropagation="true">
+                                                @selectedEmoji
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    @if (_loading && messages.Any())
+    {
+        <div class="pm-message-loading-overlay">
+            <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Primary" />
+        </div>
+    }
+</div>
+
+@if (_editOpen)
+{
+    <div class="pm-chat-modal-backdrop" @onclick="CloseEditDialog">
+        <div class="pm-chat-modal-card" @onclick:stopPropagation="true">
+            <div class="pm-chat-modal-header">
+                <div>
+                    <MudText Typo="Typo.h6">Chỉnh sửa tin nhắn</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Nội dung sẽ được cập nhật ngay trong cuộc trò chuyện.
+                    </MudText>
+                </div>
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               OnClick="CloseEditDialog" />
+            </div>
+
+            <div class="pm-chat-modal-body">
+                <MudTextField @bind-Value="_editContent"
+                              AutoFocus="true"
+                              Variant="Variant.Outlined"
+                              Lines="4"
+                              Label="Nội dung"
+                              FullWidth="true" />
+            </div>
+
+            <div class="pm-chat-modal-actions">
+                <MudButton ButtonType="ButtonType.Button"
+                           OnClick="CloseEditDialog">
+                    Huỷ
+                </MudButton>
+
+                <MudButton ButtonType="ButtonType.Button"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@string.IsNullOrWhiteSpace(_editContent)"
+                           OnClick="SaveEditAsync">
+                    Lưu
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_forwardOpen)
+{
+    <div class="pm-chat-modal-backdrop" @onclick="CloseForwardDialog">
+        <div class="pm-chat-modal-card" @onclick:stopPropagation="true">
+            <div class="pm-chat-modal-header">
+                <div>
+                    <MudText Typo="Typo.h6">Chuyển tiếp tin nhắn</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Chọn một hội thoại để chuyển tiếp.
+                    </MudText>
+                </div>
+
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               OnClick="CloseForwardDialog" />
+            </div>
+
+            <div class="pm-chat-modal-body">
+                <MudTextField @bind-Value="_forwardSearch"
+                              Placeholder="Tìm hội thoại..."
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              Margin="Margin.Dense"
+                              FullWidth="true" />
+
+                @if (_forwardLoading)
+                {
+                    <div style="display:flex;justify-content:center;padding:22px;">
+                        <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Primary" />
+                    </div>
+                }
+                else if (!FilteredForwardConversations.Any())
+                {
+                    <div style="padding:18px;text-align:center;color:var(--mud-palette-text-secondary);">
+                        Không tìm thấy hội thoại phù hợp.
+                    </div>
+                }
+                else
+                {
+                    <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:360px;overflow:auto;">
+                        @foreach (var conv in FilteredForwardConversations)
+                        {
+                            var c = conv;
+
+                            <button type="button"
+                                    class="pm-forward-item"
+                                    @onclick="() => ForwardToConversationAsync(c)">
+                                <MudAvatar Size="Size.Medium"
+                                           Color="@(c.Type == "group" ? Color.Info : Color.Primary)"
+                                           Style="width:40px;height:40px;flex-shrink:0;">
+                                    @if (c.Type == "group")
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Groups" Style="font-size:20px;" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Person" Style="font-size:20px;" />
+                                    }
+                                </MudAvatar>
+
+                                <div style="min-width:0;text-align:left;">
+                                    <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        @GetForwardConversationDisplayName(c)
+                                    </div>
+                                    <div style="font-size:12px;color:var(--mud-palette-text-secondary);">
+                                        @(c.Type == "group" ? Loc.T("chat.groupLabel") : "Tin nhắn riêng")
+                                    </div>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="pm-chat-modal-actions">
+                <MudButton ButtonType="ButtonType.Button" OnClick="CloseForwardDialog">
+                    Đóng
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .pm-message-highlight {
+        animation: pm-highlight-pulse 1.2s ease-in-out 3;
+        border-radius: 14px;
+    }
+
+    .pm-message-skeleton-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 8px 4px;
+    }
+
+    .pm-message-skeleton {
+        width: min(420px, 68%);
+        min-height: 58px;
+        border-radius: 16px;
+        padding: 12px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        opacity: .78;
+    }
+
+        .pm-message-skeleton.own {
+            align-self: flex-end;
+            background: rgba(59, 130, 246, .14);
+        }
+
+        .pm-message-skeleton span {
+            display: block;
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, .28);
+        }
+
+            .pm-message-skeleton span + span {
+                width: 62%;
+                margin-top: 10px;
+            }
+
+    .pm-message-loading-overlay {
+        position: sticky;
+        bottom: 10px;
+        align-self: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
+        pointer-events: none;
+    }
+
+    @@keyframes pm-highlight-pulse {
+        0%, 100% {
+            background: transparent;
+        }
+
+        50% {
+            background: rgba(250, 204, 21, .28);
+        }
+    }
+
+    .pm-message-line {
+        display: flex;
+        gap: 8px;
+        max-width: 72%;
+        min-width: min(240px, 100%);
+    }
+
+        .pm-message-line.other {
+            align-items: flex-start;
+        }
+
+        .pm-message-line.own {
+            align-items: flex-end;
+            flex-direction: row-reverse;
+        }
+
+    .pm-message-line.other .mud-avatar-root {
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+    .pm-bubble.other {
+        background: var(--mud-palette-surface) !important;
+        color: var(--mud-palette-text-primary) !important;
+        border: 1px solid var(--mud-palette-divider) !important;
+        box-shadow: var(--pm-shadow-sm);
+    }
+
+    .pm-message-text {
+        display: block;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .pm-system-message-row {
+        display: flex;
+        justify-content: center;
+        padding: 6px 12px;
+    }
+
+    .pm-system-message-text {
+        max-width: min(560px, 92%);
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, .14);
+        color: var(--mud-palette-text-secondary);
+        font-size: .76rem;
+        font-weight: 700;
+        text-align: center;
+        overflow-wrap: break-word;
+        word-break: normal;
+    }
+
+        .pm-bubble.other span,
+        .pm-bubble.other div,
+        .pm-bubble.other p {
+            color: var(--mud-palette-text-primary) !important;
+        }
+
+    .pm-bubble.own {
+        background: linear-gradient(135deg, var(--pm-blue-600), var(--pm-blue-500)) !important;
+        color: white !important;
+    }
+
+        .pm-bubble.own span,
+        .pm-bubble.own div,
+        .pm-bubble.own p {
+            color: white !important;
+        }
+
+    .pm-forwarded-label {
+        font-size: 11px;
+        color: var(--mud-palette-text-secondary);
+        margin: 0 6px 3px;
+        opacity: .78;
+    }
+
+    .pm-attachments {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: min(320px, 70vw);
+    }
+
+    .pm-image-link {
+        display: block;
+        line-height: 0;
+    }
+
+    .pm-image-preview {
+        max-width: min(340px, 70vw);
+        max-height: 320px;
+        border-radius: 14px;
+        object-fit: cover;
+        display: block;
+        border: 1px solid var(--mud-palette-divider);
+    }
+
+    .pm-attachment-caption {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary) !important;
+        word-break: break-word;
+    }
+
+    .pm-file-wrapper {
+        min-width: min(340px, 70vw);
+        max-width: min(380px, 70vw);
+        color: var(--mud-palette-text-primary) !important;
+    }
+
+    .pm-file-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        color: var(--mud-palette-text-primary) !important;
+        background: rgba(59, 130, 246, .08) !important;
+        border: 1px solid var(--mud-palette-divider) !important;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .pm-bubble.own .pm-file-card {
+        background: rgba(255, 255, 255, .12) !important;
+        border: 1px solid rgba(255, 255, 255, .18) !important;
+    }
+
+    .pm-vuln-card {
+        min-width: min(320px, 72vw);
+        max-width: 430px;
+        display: grid;
+        gap: 9px;
+        border: 1px solid rgba(220, 38, 38, .28);
+        border-left: 3px solid #DC2626;
+        border-radius: 10px;
+        padding: 10px;
+        background: color-mix(in srgb, var(--mud-palette-surface) 88%, #DC2626 12%);
+    }
+
+    .pm-vuln-card-top,
+    .pm-vuln-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .pm-vuln-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: .72rem;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-vuln-title {
+        font-size: .95rem;
+        font-weight: 800;
+        line-height: 1.35;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-vuln-endpoint {
+        display: inline-flex;
+        align-items: center;
+        align-self: start;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 4px 7px;
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+        font-size: .78rem;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    .pm-vuln-payload {
+        margin: 0;
+        max-height: 4.5em;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: rgba(15, 23, 42, .06);
+        color: var(--mud-palette-text-primary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+
+    .pm-vuln-footnote {
+        color: var(--mud-palette-text-secondary);
+        font-size: .75rem;
+        font-weight: 700;
+    }
+
+    .pm-vuln-status,
+    .pm-vuln-severity {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .72rem;
+        font-weight: 800;
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-vuln-severity.info,
+    .pm-vuln-severity.low {
+        color: #0369A1;
+        background: #E0F2FE;
+        border-color: #7DD3FC;
+    }
+
+    .pm-vuln-severity.medium {
+        color: #92400E;
+        background: #FEF3C7;
+        border-color: #FBBF24;
+    }
+
+    .pm-vuln-severity.high {
+        color: #991B1B;
+        background: #FEE2E2;
+        border-color: #FCA5A5;
+    }
+
+    .pm-vuln-severity.critical {
+        color: #7F1D1D;
+        background: #FECACA;
+        border-color: #EF4444;
+    }
+
+    .pm-bubble.own .pm-vuln-severity.info,
+    .pm-bubble.own .pm-vuln-severity.low {
+        color: #0369A1 !important;
+    }
+
+    .pm-bubble.own .pm-vuln-severity.medium {
+        color: #92400E !important;
+    }
+
+    .pm-bubble.own .pm-vuln-severity.high {
+        color: #991B1B !important;
+    }
+
+    .pm-bubble.own .pm-vuln-severity.critical {
+        color: #7F1D1D !important;
+    }
+
+    .pm-vuln-open-btn {
+        border: 1px solid var(--mud-palette-primary);
+        background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+        color: var(--mud-palette-primary);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: .78rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .pm-vuln-open-btn:hover {
+        background: var(--mud-palette-primary);
+        color: var(--mud-palette-primary-text);
+    }
+
+    .pm-bubble.own .pm-vuln-card {
+        background: rgba(255, 255, 255, .12);
+        border-color: rgba(255, 255, 255, .28);
+        border-left-color: #FCA5A5;
+    }
+
+    .pm-bubble.own .pm-vuln-open-btn {
+        border-color: rgba(255, 255, 255, .72);
+        background: rgba(255, 255, 255, .14);
+        color: #fff;
+    }
+
+    .pm-reminder-card {
+        min-width: min(300px, 72vw);
+        max-width: 420px;
+        display: grid;
+        gap: 8px;
+        border: 1px solid rgba(245, 158, 11, .34);
+        border-left: 3px solid #F59E0B;
+        border-radius: 10px;
+        padding: 10px;
+        background: color-mix(in srgb, var(--mud-palette-surface) 88%, #F59E0B 12%);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-reminder-top,
+    .pm-reminder-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .pm-reminder-kind {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: .72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-reminder-text {
+        font-size: .95rem;
+        font-weight: 800;
+        line-height: 1.35;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-reminder-due {
+        font-size: .78rem;
+        font-weight: 800;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-reminder-status {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .72rem;
+        font-weight: 900;
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-reminder-status.pending {
+        color: #92400E;
+        background: #FEF3C7;
+        border-color: #FBBF24;
+    }
+
+    .pm-reminder-status.sent,
+    .pm-reminder-status.completed {
+        color: #065F46;
+        background: #D1FAE5;
+        border-color: #6EE7B7;
+    }
+
+    .pm-reminder-status.cancelled {
+        color: #64748B;
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }
+
+    .pm-bubble.own .pm-reminder-card {
+        background: rgba(255, 255, 255, .12);
+        border-color: rgba(255, 255, 255, .28);
+        border-left-color: #FDE68A;
+    }
+
+    .pm-bubble.own .pm-reminder-status.pending {
+        color: #92400E !important;
+    }
+
+    .pm-bubble.own .pm-reminder-status.sent,
+    .pm-bubble.own .pm-reminder-status.completed {
+        color: #065F46 !important;
+    }
+
+    .pm-bubble.own .pm-reminder-status.cancelled {
+        color: #475569 !important;
+    }
+
+    .pm-task-card {
+        min-width: min(300px, 72vw);
+        max-width: 420px;
+        display: grid;
+        gap: 8px;
+        border: 1px solid rgba(37, 99, 235, .28);
+        border-left: 3px solid #2563EB;
+        border-radius: 10px;
+        padding: 10px;
+        background: color-mix(in srgb, var(--mud-palette-surface) 88%, #2563EB 12%);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-task-top,
+    .pm-task-meta,
+    .pm-task-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .pm-task-kind {
+        font-size: .72rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-task-title {
+        font-size: .95rem;
+        font-weight: 800;
+        line-height: 1.35;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-task-chip {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .72rem;
+        font-weight: 900;
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-task-chip.low { color:#166534; background:#DCFCE7; border-color:#86EFAC; }
+    .pm-task-chip.medium { color:#1D4ED8; background:#DBEAFE; border-color:#93C5FD; }
+    .pm-task-chip.high { color:#9A3412; background:#FFEDD5; border-color:#FDBA74; }
+    .pm-task-chip.critical { color:#991B1B; background:#FEE2E2; border-color:#FCA5A5; }
+    .pm-task-chip.open { color:#334155; background:#F8FAFC; border-color:#CBD5E1; }
+    .pm-task-chip.inprogress { color:#1D4ED8; background:#DBEAFE; border-color:#93C5FD; }
+    .pm-task-chip.done { color:#065F46; background:#D1FAE5; border-color:#6EE7B7; }
+    .pm-task-chip.completed { color:#065F46; background:#D1FAE5; border-color:#6EE7B7; }
+    .pm-task-chip.cancelled { color:#6B7280; background:#F3F4F6; border-color:#D1D5DB; }
+
+    .pm-task-meta {
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    .pm-task-open-btn {
+        border: 1px solid var(--mud-palette-primary);
+        background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+        color: var(--mud-palette-primary);
+        border-radius: 8px;
+        padding: 5px 9px;
+        font-size: .78rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .pm-bubble.own .pm-task-card {
+        background: rgba(255, 255, 255, .12);
+        border-color: rgba(255, 255, 255, .28);
+        border-left-color: #93C5FD;
+    }
+
+    .pm-bubble.own .pm-task-open-btn {
+        border-color: rgba(255, 255, 255, .72);
+        background: rgba(255, 255, 255, .14);
+        color: #fff;
+    }
+
+    .pm-file-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(59, 130, 246, .16) !important;
+        color: var(--mud-palette-primary) !important;
+        flex-shrink: 0;
+    }
+
+    .pm-bubble.own .pm-file-icon {
+        background: rgba(255, 255, 255, .16) !important;
+        color: white !important;
+    }
+
+    .pm-file-info {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+    }
+
+    .pm-file-name {
+        color: var(--mud-palette-text-primary) !important;
+        font-weight: 700;
+        font-size: .86rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pm-bubble.own .pm-file-name {
+        color: white !important;
+    }
+
+    .pm-file-meta {
+        color: var(--mud-palette-text-secondary) !important;
+        font-size: .74rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pm-bubble.own .pm-file-meta {
+        color: rgba(255, 255, 255, .78) !important;
+    }
+
+    .pm-file-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .pm-file-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        text-decoration: none;
+        font-size: .75rem;
+        font-weight: 700;
+        color: var(--mud-palette-text-primary) !important;
+        background: var(--mud-palette-surface) !important;
+        border: 1px solid var(--mud-palette-divider) !important;
+        transition: .15s ease;
+    }
+
+        .pm-file-action-btn:hover {
+            background: rgba(59, 130, 246, .12) !important;
+            color: var(--mud-palette-primary) !important;
+            text-decoration: none;
+        }
+
+        .pm-file-action-btn.primary {
+            background: var(--mud-palette-primary) !important;
+            border-color: var(--mud-palette-primary) !important;
+            color: white !important;
+        }
+
+    .pm-bubble.own .pm-file-action-btn {
+        background: rgba(255, 255, 255, .16) !important;
+        color: white !important;
+        border-color: rgba(255, 255, 255, .20) !important;
+    }
+
+        .pm-bubble.own .pm-file-action-btn.primary {
+            background: white !important;
+            color: var(--pm-blue-600) !important;
+            border-color: white !important;
+        }
+
+    .pm-code-block {
+        min-width: min(360px, 70vw);
+        max-width: min(620px, 70vw);
+        overflow: hidden;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, .22);
+        background: #0B1120;
+        color: #E5E7EB;
+        margin-top: 4px;
+    }
+
+    .pm-code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 10px;
+        background: rgba(15, 23, 42, .96);
+        border-bottom: 1px solid rgba(148, 163, 184, .18);
+    }
+
+    .pm-code-lang {
+        color: #93C5FD !important;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .pm-code-copy {
+        border: 0;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: rgba(59, 130, 246, .18);
+        color: #DBEAFE;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .pm-code-copy:hover {
+            background: rgba(59, 130, 246, .32);
+        }
+
+    .pm-code-body {
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        color: #E5E7EB;
+        font-family: 'Fira Code', Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre;
+    }
+
+    .pm-reactions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+        padding: 0 4px;
+    }
+
+    .pm-reaction-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 24px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        cursor: pointer;
+        font-size: 13px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    }
+
+        .pm-reaction-pill.mine {
+            border-color: var(--mud-palette-primary);
+            background: rgba(59, 130, 246, .16);
+        }
+
+        .pm-reaction-pill .count {
+            font-size: 12px;
+            font-weight: 700;
+            opacity: .8;
+        }
+
+    .pm-msg-time {
+        font-size: 11px;
+        color: var(--mud-palette-text-secondary);
+        margin: 3px 6px 0;
+    }
+
+    .pm-pin-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: 0 2px 6px rgba(0,0,0,.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+    }
+
+    .pm-chat-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 250000;
+        background: rgba(2, 6, 23, .52);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+    }
+
+    .pm-chat-modal-card {
+        width: min(440px, 100%);
+        max-height: calc(100vh - 40px);
+        overflow: hidden;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+
+    .pm-chat-modal-header {
+        padding: 18px 20px 10px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+    }
+
+    .pm-chat-modal-body {
+        padding: 10px 20px 16px;
+        overflow: auto;
+    }
+
+    .pm-chat-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 20px 18px;
+        border-top: 1px solid var(--mud-palette-divider);
+    }
+
+    .pm-forward-item {
+        width: 100%;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mud-palette-text-primary);
+        border-radius: 14px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+    }
+
+        .pm-forward-item:hover {
+            background: rgba(59, 130, 246, .12);
+            border-color: rgba(59, 130, 246, .22);
+
+        }
+
+    .pm-message-actions {
+        display: flex;
+        gap: 2px;
+        align-items: center;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        width: max-content;
+        min-width: 0;
+        height: 30px;
+        transition: opacity .12s ease, transform .12s ease;
+        flex-shrink: 0;
+        transform: translateY(2px);
+    }
+
+        .pm-message-row:hover .pm-message-actions,
+        .pm-message-line:hover .pm-message-actions,
+        .pm-message-actions.show,
+        .pm-message-actions:hover {
+            opacity: .92;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+    .pm-reaction-picker-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pm-reaction-picker {
+        position: absolute;
+        bottom: 34px;
+        z-index: 30;
+        display: grid;
+        grid-template-columns: repeat(6, 34px);
+        gap: 4px;
+        padding: 6px;
+        border-radius: 12px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: 0 12px 32px rgba(15, 23, 42, .22);
+        width: max-content;
+    }
+
+        .pm-reaction-picker.own {
+            right: 0;
+        }
+
+        .pm-reaction-picker.other {
+            left: 0;
+        }
+
+    .pm-reaction-picker-btn {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--mud-palette-text-primary);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        transition: background .12s ease, transform .12s ease;
+    }
+
+        .pm-reaction-picker-btn:hover {
+            background: rgba(59, 130, 246, .12);
+            transform: translateY(-1px);
+        }
+</style>
+
+@code {
+
+    [Parameter] public int? PeerId { get; set; }
+    [Parameter] public int? GroupId { get; set; }
+    [Parameter] public int? TargetMessageId { get; set; }
+    [Parameter] public string? PeerDisplayNameOverride { get; set; }
+    [Parameter] public EventCallback<MessageResponse> OnReply { get; set; }
+    [Parameter] public EventCallback<MessagePinnedEvent> OnPinChanged { get; set; }
+    [Parameter] public EventCallback OnReadStateChanged { get; set; }
+    private List<MessageResponse> messages = new();
+    private int CurrentUserId;
+    private bool _showImageViewer;
+    private AttachmentResponse? _currentImage;
+
+    private void OpenImageViewer(AttachmentResponse image)
+    {
+        _currentImage = image;
+        _showImageViewer = true;
+    }
+
+    private void CloseImageViewer()
+    {
+        _showImageViewer = false;
+        _currentImage = null;
+    }
+    private bool _loading = true;
+    private bool _hasMore;
+    private bool _canModerateCurrentGroup;
+    private bool _editOpen;
+    private string _editContent = "";
+    private int _editId;
+    private int? _reactionPickerMessageId;
+    private readonly Dictionary<int, (string Content, MarkupString Html)> _markdownCache = new();
+    private readonly Dictionary<string, List<MessageResponse>> _firstPageCache = new();
+
+    private bool _forwardOpen;
+    private bool _forwardLoading;
+    private int _forwardMessageId;
+    private string _forwardSearch = "";
+    private List<ConversationDto> _forwardConversations = new();
+    private const int FirstPageSize = 30;
+    private const int CacheMessagesLimit = 50;
+    private const int RenderWindowSize = 100;
+    private int _windowStartIndex;
+    private long _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    private static readonly string[] ReactionEmojis = { "👍", "❤️", "😂", "😮", "😢", "🔥" };
+
+    private IEnumerable<ConversationDto> FilteredForwardConversations =>
+        _forwardConversations
+            .Where(c => string.IsNullOrWhiteSpace(_forwardSearch)
+                || GetForwardConversationDisplayName(c).Contains(_forwardSearch, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(c => c.IsPinned)
+            .ThenByDescending(c => c.LastMessageAt ?? DateTime.MinValue);
+
+    private int? _highlightMessageId;
+    private int? _lastPeerId;
+    private int? _lastGroupId;
+    private int? _lastTargetMessageId;
+    private int _loadVersion;
+    private CancellationTokenSource? _markReadCts;
+    private bool _scrollToBottomAfterRender;
+
+    private IReadOnlyList<MessageResponse> VisibleMessages
+    {
+        get
+        {
+            if (messages.Count <= RenderWindowSize)
+                return messages;
+
+            var start = Math.Clamp(_windowStartIndex, 0, Math.Max(0, messages.Count - RenderWindowSize));
+            return messages.Skip(start).Take(RenderWindowSize).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnLanguageChanged += HandleLanguageChanged;
+        await Loc.LoadAsync();
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        CurrentUserId = int.TryParse(idClaim, out var id) ? id : 0;
+
+        Hub.OnMessageReceived += HandleNewMessage;
+        Hub.OnMessageEdited += HandleEdited;
+        Hub.OnMessageDeleted += HandleDeleted;
+        Hub.OnMessageReactionUpdated += HandleReaction;
+        Hub.OnMessageRead += HandleRead;
+        Hub.OnMessagePinned += HandlePinned;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var targetChanged = TargetMessageId.HasValue && TargetMessageId != _lastTargetMessageId;
+
+        if (_lastPeerId == PeerId && _lastGroupId == GroupId && !targetChanged)
+            return;
+
+        _lastPeerId = PeerId;
+        _lastGroupId = GroupId;
+        _lastTargetMessageId = TargetMessageId;
+
+        if (!targetChanged || !messages.Any())
+            await LoadAsync();
+
+        if (TargetMessageId.HasValue)
+        {
+            await Task.Delay(120);
+            await ScrollToMessageAsync(TargetMessageId.Value);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var loadVersion = ++_loadVersion;
+        var expectedPeerId = PeerId;
+        var expectedGroupId = GroupId;
+        var cacheKey = ConversationKey(expectedPeerId, expectedGroupId);
+
+        _loading = true;
+        _canModerateCurrentGroup = false;
+        messages = new List<MessageResponse>();
+        _hasMore = false;
+        _markdownCache.Clear();
+        SetWindowToLatest();
+        StateHasChanged();
+
+        if (cacheKey != null && _firstPageCache.TryGetValue(cacheKey, out var cached))
+        {
+            messages = cached.ToList();
+            _hasMore = messages.Count >= FirstPageSize;
+            SetWindowToLatest();
+        }
+        else
+        {
+            var indexedCache = cacheKey is null
+                ? null
+                : await MessageCache.GetCachedMessagesAsync(cacheKey);
+
+            messages = indexedCache?.ToList() ?? new();
+            _hasMore = false;
+            SetWindowToLatest();
+        }
+
+        _scrollToBottomAfterRender = true;
+        StateHasChanged();
+        await ScrollToBottomAsync();
+
+        try
+        {
+            List<MessageResponse>? result = null;
+
+            if (expectedPeerId.HasValue)
+            {
+                result = await MsgService.GetDmMessagesAsync(expectedPeerId.Value, null, FirstPageSize);
+            }
+            else if (expectedGroupId.HasValue)
+            {
+                result = await MsgService.GetGroupMessagesAsync(expectedGroupId.Value, null, FirstPageSize);
+                if (result is null && string.Equals(MsgService.LastError, "Bạn không còn là thành viên của nhóm này.", StringComparison.Ordinal))
+                {
+                    Snackbar.Add(MsgService.LastError, Severity.Warning);
+                    result = new List<MessageResponse>
+                    {
+                        CreateLocalSystemMessage(expectedGroupId.Value, "Bạn đã bị xóa khỏi nhóm này")
+                    };
+                }
+                _ = LoadGroupModerationPermissionAsync(expectedGroupId.Value);
+            }
+
+            if (loadVersion != _loadVersion || PeerId != expectedPeerId || GroupId != expectedGroupId)
+                return;
+
+            messages = result ?? new List<MessageResponse>();
+            await ApplySavedStatesAsync(messages);
+            _hasMore = messages.Count >= FirstPageSize;
+            UpdateFirstPageCache(cacheKey, messages);
+            SetWindowToLatest();
+        }
+        finally
+        {
+            if (loadVersion == _loadVersion)
+            {
+                _loading = false;
+                StateHasChanged();
+
+                await ScrollToBottomAsync();
+                ScheduleMarkCurrentConversationAsRead();
+            }
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (!messages.Any())
+            return;
+
+        var beforeId = messages.First().Id;
+        List<MessageResponse>? older = null;
+        var oldScrollHeight = await JS.InvokeAsync<double>("pingmeChatScroll.getScrollHeight", "msgScroll");
+
+        if (PeerId.HasValue)
+            older = await MsgService.GetDmMessagesAsync(PeerId.Value, beforeId, FirstPageSize);
+        else if (GroupId.HasValue)
+            older = await MsgService.GetGroupMessagesAsync(GroupId.Value, beforeId, FirstPageSize);
+
+        if (older?.Any() == true)
+        {
+            await ApplySavedStatesAsync(older);
+            var uniqueOlder = older.Where(o => messages.All(m => m.Id != o.Id)).ToList();
+            messages.InsertRange(0, uniqueOlder);
+            _hasMore = older.Count >= FirstPageSize;
+            _windowStartIndex = 0;
+            UpdateFirstPageCache(CurrentConversationKey(), messages);
+        }
+        else
+        {
+            _hasMore = false;
+        }
+
+        StateHasChanged();
+        await JS.InvokeVoidAsync("pingmeChatScroll.restoreScrollAfterPrepend", "msgScroll", oldScrollHeight);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToBottomAfterRender)
+            return;
+
+        _scrollToBottomAfterRender = false;
+        await ScrollToBottomAsync();
+    }
+
+    public async Task RefreshAsync()
+    {
+        await LoadAsync();
+    }
+
+    public async Task AppendMessageAsync(MessageResponse msg)
+    {
+        if (!BelongsToCurrentConversation(msg))
+            return;
+
+        if (messages.Any(m => m.Id == msg.Id))
+            return;
+
+        var nearBottom = await IsNearBottomAsync();
+        messages.Add(msg);
+        if (msg.SenderId == CurrentUserId || nearBottom)
+            SetWindowToLatest();
+        UpsertMessageInCache(msg);
+
+        StateHasChanged();
+        if (msg.SenderId == CurrentUserId || nearBottom)
+            await ScrollToBottomAsync();
+
+        if (msg.SenderId != CurrentUserId)
+        {
+            ScheduleMarkMessageRead(msg.Id);
+        }
+    }
+
+    public async Task ScrollToMessageAsync(int messageId)
+    {
+        if (messages.All(m => m.Id != messageId))
+        {
+            var context = await MsgService.GetMessageContextAsync(messageId, 20, 20);
+
+            if (context?.Any() == true)
+            {
+                await ApplySavedStatesAsync(context);
+                messages = context;
+                _hasMore = true;
+                UpdateFirstPageCache(CurrentConversationKey(), messages);
+                SetWindowToLatest();
+
+                StateHasChanged();
+                await Task.Delay(120);
+            }
+            else
+            {
+                Snackbar.Add("Không tải được vị trí tin nhắn cần tìm.", Severity.Warning);
+                return;
+            }
+        }
+
+        _highlightMessageId = messageId;
+        StateHasChanged();
+
+        try
+        {
+            await JS.InvokeVoidAsync("pingmeChatScroll.scrollElementIntoView", $"msg-{messageId}", "center");
+        }
+        catch
+        {
+        }
+
+        _ = ClearHighlightLaterAsync(messageId);
+    }
+
+    public async Task ClearHighlightAsync()
+    {
+        _highlightMessageId = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string GetSenderDisplayName(MessageResponse msg)
+    {
+        if (PeerId.HasValue &&
+            !GroupId.HasValue &&
+            msg.SenderId == PeerId.Value &&
+            !string.IsNullOrWhiteSpace(PeerDisplayNameOverride))
+        {
+            return PeerDisplayNameOverride;
+        }
+
+        return string.IsNullOrWhiteSpace(msg.SenderDisplayName)
+            ? "Người dùng"
+            : msg.SenderDisplayName;
+    }
+
+    private string GetForwardConversationDisplayName(ConversationDto conversation)
+    {
+        if (conversation.Type.Equals("group", StringComparison.OrdinalIgnoreCase))
+            return conversation.GroupName ?? Loc.T("chat.groupLabel");
+
+        return conversation.PeerDisplayName ?? string.Empty;
+    }
+
+    private async Task ClearHighlightLaterAsync(int messageId)
+    {
+        await Task.Delay(3600);
+
+        if (_highlightMessageId == messageId)
+        {
+            _highlightMessageId = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ScheduleMarkCurrentConversationAsRead()
+    {
+        if (!PeerId.HasValue && !GroupId.HasValue)
+            return;
+
+        _markReadCts?.Cancel();
+        _markReadCts?.Dispose();
+        _markReadCts = new CancellationTokenSource();
+
+        var peerId = PeerId;
+        var groupId = GroupId;
+        var token = _markReadCts.Token;
+
+        _ = MarkCurrentConversationAsReadLaterAsync(peerId, groupId, token);
+    }
+
+    private async Task MarkCurrentConversationAsReadLaterAsync(int? peerId, int? groupId, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(180, token);
+            await ReadReceiptService.MarkConversationReadAsync(peerId, groupId);
+
+            if (!token.IsCancellationRequested && OnReadStateChanged.HasDelegate)
+                await InvokeAsync(async () => await OnReadStateChanged.InvokeAsync());
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+        }
+    }
+
+    private void ScheduleMarkMessageRead(int messageId)
+    {
+        _ = MarkMessageReadLaterAsync(messageId);
+    }
+
+    private async Task MarkMessageReadLaterAsync(int messageId)
+    {
+        try
+        {
+            await Task.Delay(120);
+            await ReadReceiptService.MarkMessageReadAsync(messageId);
+
+            if (OnReadStateChanged.HasDelegate)
+                await InvokeAsync(async () => await OnReadStateChanged.InvokeAsync());
+        }
+        catch
+        {
+        }
+    }
+
+    private bool BelongsToCurrentConversation(MessageResponse msg)
+    {
+        return (PeerId.HasValue && msg.GroupId == null &&
+                ((msg.SenderId == CurrentUserId && msg.ReceiverId == PeerId) ||
+                 (msg.SenderId == PeerId && msg.ReceiverId == CurrentUserId)))
+            || (GroupId.HasValue && msg.GroupId == GroupId);
+    }
+
+    private string? CurrentConversationKey() => ConversationKey(PeerId, GroupId);
+
+    private static string? ConversationKey(int? peerId, int? groupId)
+    {
+        if (groupId.HasValue)
+            return $"group:{groupId.Value}";
+
+        if (peerId.HasValue)
+            return $"dm:{peerId.Value}";
+
+        return null;
+    }
+
+    private string? ConversationKeyForMessage(MessageResponse msg)
+    {
+        if (msg.GroupId.HasValue)
+            return $"group:{msg.GroupId.Value}";
+
+        if (msg.SenderId == CurrentUserId && msg.ReceiverId.HasValue)
+            return $"dm:{msg.ReceiverId.Value}";
+
+        if (msg.ReceiverId == CurrentUserId)
+            return $"dm:{msg.SenderId}";
+
+        return null;
+    }
+
+    private string? ConversationKeyForReaction(ReactionUpdateEvent data)
+    {
+        if (data.GroupId.HasValue)
+            return $"group:{data.GroupId.Value}";
+
+        if (data.SenderId == CurrentUserId && data.ReceiverId.HasValue)
+            return $"dm:{data.ReceiverId.Value}";
+
+        if (data.ReceiverId == CurrentUserId)
+            return $"dm:{data.SenderId}";
+
+        return null;
+    }
+
+    private void UpdateFirstPageCache(string? key, List<MessageResponse> source)
+    {
+        if (key == null)
+            return;
+
+        _firstPageCache[key] = source
+            .OrderByDescending(m => m.Id)
+            .Take(CacheMessagesLimit)
+            .OrderBy(m => m.Id)
+            .ToList();
+
+        _ = MessageCache.SetCachedMessagesAsync(key, _firstPageCache[key]);
+    }
+
+    private void UpsertMessageInCache(MessageResponse msg)
+    {
+        var key = ConversationKeyForMessage(msg);
+        if (key == null)
+            return;
+
+        if (!_firstPageCache.TryGetValue(key, out var cached))
+            cached = new List<MessageResponse>();
+
+        var idx = cached.FindIndex(m => m.Id == msg.Id);
+        if (idx >= 0)
+            cached[idx] = msg;
+        else
+            cached.Add(msg);
+
+        UpdateFirstPageCache(key, cached);
+    }
+
+    private void UpdateCachedMessage(int messageId, Action<MessageResponse> update, string? preferredKey = null)
+    {
+        if (preferredKey != null && _firstPageCache.TryGetValue(preferredKey, out var preferred))
+        {
+            var preferredMsg = preferred.FirstOrDefault(m => m.Id == messageId);
+            if (preferredMsg != null)
+            {
+                update(preferredMsg);
+                _ = MessageCache.SetCachedMessagesAsync(preferredKey, preferred);
+                return;
+            }
+        }
+
+        foreach (var pair in _firstPageCache)
+        {
+            var cached = pair.Value;
+            var cachedMsg = cached.FirstOrDefault(m => m.Id == messageId);
+            if (cachedMsg != null)
+            {
+                update(cachedMsg);
+                _ = MessageCache.SetCachedMessagesAsync(pair.Key, cached);
+                return;
+            }
+        }
+    }
+
+    private async Task ApplySavedStatesAsync(IEnumerable<MessageResponse> targetMessages)
+    {
+        var list = targetMessages.Where(m => m.Id > 0 && !m.IsDeleted).ToList();
+        if (list.Count == 0)
+            return;
+
+        var states = await SavedMessageService.CheckSavedAsync(list.Select(m => m.Id));
+
+        foreach (var msg in list)
+        {
+            if (states.TryGetValue(msg.Id, out var isSaved))
+                msg.IsSaved = isSaved;
+        }
+    }
+
+    private void HandleNewMessage(MessageResponse msg)
+    {
+        UpsertMessageInCache(msg);
+
+        if (!BelongsToCurrentConversation(msg))
+            return;
+
+        if (messages.Any(m => m.Id == msg.Id))
+            return;
+
+        InvokeAsync(async () =>
+        {
+            var nearBottom = await IsNearBottomAsync();
+
+            if (messages.Any(m => m.Id == msg.Id))
+                return;
+
+            messages.Add(msg);
+            UpsertMessageInCache(msg);
+
+            if (msg.SenderId == CurrentUserId || nearBottom)
+                SetWindowToLatest();
+
+            StateHasChanged();
+
+            if (msg.SenderId == CurrentUserId || nearBottom)
+                await ScrollToBottomAsync();
+
+            if (msg.SenderId != CurrentUserId)
+            {
+                ScheduleMarkMessageRead(msg.Id);
+            }
+        });
+    }
+
+    private void HandleEdited(MessageResponse msg)
+    {
+        UpsertMessageInCache(msg);
+
+        var idx = messages.FindIndex(m => m.Id == msg.Id);
+
+        if (idx >= 0)
+        {
+            messages[idx] = msg;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void HandleDeleted(object raw)
+    {
+        InvokeAsync(() =>
+        {
+            var messageId = TryGetInt(raw, "messageId");
+            if (messageId.HasValue)
+            {
+                UpdateCachedMessage(messageId.Value, msg =>
+                {
+                    msg.IsDeleted = true;
+                    msg.Content = "Tin nhắn đã thu hồi";
+                });
+
+                var msg = messages.FirstOrDefault(m => m.Id == messageId.Value);
+                if (msg != null)
+                {
+                    msg.IsDeleted = true;
+                    msg.Content = "Tin nhắn đã thu hồi";
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            _ = LoadAsync();
+        });
+    }
+
+    private void HandleReaction(ReactionUpdateEvent data)
+    {
+        UpdateCachedMessage(
+            data.MessageId,
+            msg => msg.Reactions = data.Reactions ?? new List<ReactionSummary>(),
+            ConversationKeyForReaction(data));
+
+        InvokeAsync(() =>
+        {
+            var msg = messages.FirstOrDefault(m => m.Id == data.MessageId);
+
+            if (msg != null)
+                msg.Reactions = data.Reactions ?? new List<ReactionSummary>();
+
+            StateHasChanged();
+        });
+    }
+
+    private void HandleRead(ReadReceiptEvent data)
+    {
+        InvokeAsync(() =>
+        {
+            if (data.MessageId.HasValue)
+                AddReadUserToMessage(data.MessageId.Value, data.UserId);
+
+            if (data.MessageIds != null)
+            {
+                foreach (var id in data.MessageIds)
+                    AddReadUserToMessage(id, data.UserId);
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private void AddReadUserToMessage(int messageId, int userId)
+    {
+        UpdateCachedMessage(messageId, cachedMsg =>
+        {
+            cachedMsg.ReadByUserIds ??= new List<int>();
+            if (!cachedMsg.ReadByUserIds.Contains(userId))
+                cachedMsg.ReadByUserIds.Add(userId);
+        });
+
+        var msg = messages.FirstOrDefault(m => m.Id == messageId);
+
+        if (msg == null)
+            return;
+
+        msg.ReadByUserIds ??= new List<int>();
+
+        if (!msg.ReadByUserIds.Contains(userId))
+            msg.ReadByUserIds.Add(userId);
+    }
+
+    private bool IsReadByOther(MessageResponse msg)
+    {
+        return msg.ReadByUserIds != null &&
+               msg.ReadByUserIds.Any(id => id != CurrentUserId);
+    }
+
+    private bool ShouldRenderTextContent(MessageResponse msg)
+    {
+        if (string.IsNullOrWhiteSpace(msg.Content))
+            return false;
+
+        if (!msg.Attachments.Any())
+            return true;
+
+        return !msg.Attachments.Any(a =>
+            string.Equals(a.FileName, msg.Content, StringComparison.Ordinal));
+    }
+
+    private static bool IsVulnerabilityMessage(MessageResponse msg) =>
+        string.Equals(msg.MessageType, "Vulnerability", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsReminderMessage(MessageResponse msg) =>
+        string.Equals(msg.MessageType, "Reminder", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTaskMessage(MessageResponse msg) =>
+        string.Equals(msg.MessageType, "Task", StringComparison.OrdinalIgnoreCase);
+
+    private RenderFragment RenderReminderCard(MessageResponse msg) => builder =>
+    {
+        var payload = ParseReminderPayload(msg.Content);
+        var sequence = 0;
+        var text = payload?.Text ?? msg.Content ?? string.Empty;
+        var status = payload?.Status ?? "Pending";
+        var dueAt = payload is not null && payload.RemindAtUtc > DateTime.MinValue
+            ? payload.RemindAtUtc.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
+            : string.Empty;
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-reminder-card");
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-reminder-top");
+
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "pm-reminder-kind");
+        builder.OpenComponent<MudIcon>(sequence++);
+        builder.AddAttribute(sequence++, "Icon", Icons.Material.Filled.Alarm);
+        builder.AddAttribute(sequence++, "Style", "font-size:15px;");
+        builder.CloseComponent();
+        builder.AddContent(sequence++, Loc.T("reminder.title"));
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", $"pm-reminder-status {status.Trim().ToLowerInvariant()}");
+        builder.AddContent(sequence++, FormatReminderStatus(status));
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-reminder-text");
+        builder.AddContent(sequence++, text);
+        builder.CloseElement();
+
+        if (!string.IsNullOrWhiteSpace(dueAt))
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "pm-reminder-due");
+            builder.AddContent(sequence++, $"{Loc.T("reminder.dueAt")}: {dueAt}");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-footnote");
+        builder.AddContent(sequence++, string.Equals(status, "Sent", StringComparison.OrdinalIgnoreCase)
+            ? "Đã gửi thông báo"
+            : Loc.T("reminder.fromCommand"));
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderVulnerabilityCard(MessageResponse msg) => builder =>
+    {
+        var payload = ParseVulnerabilityPayload(msg.Content);
+        var sequence = 0;
+        var severity = payload?.Severity ?? "Medium";
+        var title = payload?.Title ?? "Vulnerability finding";
+        var status = payload?.Status ?? "Open";
+        var findingId = payload?.FindingId;
+        var endpoint = FormatEndpoint(payload?.HttpMethod, payload?.AffectedEndpoint);
+        var payloadPreview = BuildPayloadPreview(payload?.Payload);
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-card");
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-card-top");
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-kind");
+        builder.AddContent(sequence++, "🎯 Pentest Finding");
+        builder.CloseElement();
+        if (findingId.HasValue && findingId.Value > 0)
+        {
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "pm-vuln-status");
+            builder.AddContent(sequence++, $"Finding #{findingId.Value}");
+            builder.CloseElement();
+        }
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", $"pm-vuln-severity {severity.Trim().ToLowerInvariant()}");
+        builder.AddContent(sequence++, severity);
+        builder.CloseElement();
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-status");
+        builder.AddContent(sequence++, status);
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-title");
+        builder.AddContent(sequence++, title);
+        builder.CloseElement();
+
+        if (!string.IsNullOrWhiteSpace(endpoint))
+        {
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "pm-vuln-endpoint");
+            builder.AddContent(sequence++, $"Endpoint: {endpoint}");
+            builder.CloseElement();
+        }
+
+        if (!string.IsNullOrWhiteSpace(payloadPreview))
+        {
+            builder.OpenElement(sequence++, "pre");
+            builder.AddAttribute(sequence++, "class", "pm-vuln-payload");
+            builder.AddContent(sequence++, payloadPreview);
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-footnote");
+        builder.AddContent(sequence++, "Created from /vuln command");
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-card-actions");
+        builder.OpenElement(sequence++, "button");
+        builder.AddAttribute(sequence++, "type", "button");
+        builder.AddAttribute(sequence++, "class", "pm-vuln-open-btn");
+        builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenFinding(findingId)));
+        builder.AddContent(sequence++, "Open in Finding Tracker");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private RenderFragment RenderTaskCard(MessageResponse msg) => builder =>
+    {
+        var payload = ParseTaskPayload(msg.Content);
+        var sequence = 0;
+        var title = payload?.Title ?? msg.Content ?? "Task";
+        var priority = payload?.Priority ?? "Medium";
+        var status = payload?.Status ?? "Open";
+        var dueAt = payload?.DueAtUtc;
+        var assignee = payload?.AssignedToDisplayName;
+        var taskId = payload?.TaskId;
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-task-card");
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-task-top");
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "pm-task-kind");
+        builder.AddContent(sequence++, "Task");
+        builder.CloseElement();
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", $"pm-task-chip {priority.Trim().ToLowerInvariant()}");
+        builder.AddContent(sequence++, priority);
+        builder.CloseElement();
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", $"pm-task-chip {status.Trim().ToLowerInvariant()}");
+        builder.AddContent(sequence++, status);
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-task-title");
+        builder.AddContent(sequence++, title);
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-task-meta");
+        if (!string.IsNullOrWhiteSpace(assignee))
+        {
+            builder.OpenElement(sequence++, "span");
+            builder.AddContent(sequence++, $"Assignee: {assignee}");
+            builder.CloseElement();
+        }
+        if (dueAt.HasValue)
+        {
+            builder.OpenElement(sequence++, "span");
+            builder.AddContent(sequence++, $"Due: {dueAt.Value.ToLocalTime():dd/MM/yyyy HH:mm}");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-task-actions");
+        builder.OpenElement(sequence++, "button");
+        builder.AddAttribute(sequence++, "type", "button");
+        builder.AddAttribute(sequence++, "class", "pm-task-open-btn");
+        builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => OpenTask(taskId)));
+        builder.AddContent(sequence++, "Open Task Center");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private void OpenTask(int? taskId)
+    {
+        Nav.NavigateTo(taskId.HasValue && taskId.Value > 0 ? $"/tasks?taskId={taskId.Value}" : "/tasks");
+    }
+
+    private void OpenFinding(int? findingId)
+    {
+        Nav.NavigateTo(findingId.HasValue && findingId.Value > 0 ? $"/pentest?findingId={findingId.Value}" : "/pentest");
+    }
+
+    private static string? FormatEndpoint(string? method, string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+            return null;
+
+        return string.IsNullOrWhiteSpace(method)
+            ? endpoint.Trim()
+            : $"{method.Trim().ToUpperInvariant()} {endpoint.Trim()}";
+    }
+
+    private static string? BuildPayloadPreview(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+            return null;
+
+        var lines = payload.Trim().Replace("\r\n", "\n").Split('\n');
+        return string.Join('\n', lines.Take(2));
+    }
+
+    private static VulnerabilityMessagePayload? ParseVulnerabilityPayload(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<VulnerabilityMessagePayload>(
+                content,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static TaskMessagePayload? ParseTaskPayload(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<TaskMessagePayload>(
+                content,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsSystemMessage(MessageResponse msg) =>
+        string.Equals(msg.MessageType, "System", StringComparison.OrdinalIgnoreCase);
+
+    private MarkupString RenderMarkdown(MessageResponse msg)
+    {
+        var content = msg.Content ?? string.Empty;
+
+        if (_markdownCache.TryGetValue(msg.Id, out var cached) &&
+            string.Equals(cached.Content, content, StringComparison.Ordinal))
+        {
+            return cached.Html;
+        }
+
+        var html = (MarkupString)MarkdownHelper.ToChatHtml(content);
+        _markdownCache[msg.Id] = (content, html);
+        return html;
+    }
+
+    private static MessageResponse CreateLocalSystemMessage(int groupId, string content) => new()
+    {
+        Id = -Math.Abs(groupId),
+        SenderId = 0,
+        GroupId = groupId,
+        Content = content,
+        MessageType = "System",
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    private string GetDownloadUrl(AttachmentResponse att, bool inline = false)
+    {
+        if (!Uri.TryCreate(att.FileUrl, UriKind.Absolute, out var uri))
+            return att.FileUrl;
+
+        var parts = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        var messagesIndex = Array.FindIndex(
+            parts,
+            p => string.Equals(p, "messages", StringComparison.OrdinalIgnoreCase)
+        );
+
+        if (messagesIndex < 0 || parts.Length <= messagesIndex + 2)
+            return att.FileUrl;
+
+        var date = parts[messagesIndex + 1];
+        var fileName = Uri.UnescapeDataString(parts[messagesIndex + 2]);
+
+        var url = $"{uri.Scheme}://{uri.Authority}/api/files/download/messages/{date}/{Uri.EscapeDataString(fileName)}?originalName={Uri.EscapeDataString(att.FileName)}";
+        if (inline)
+            url += "&inline=true";
+        return url;
+    }
+
+    private async Task CopyCodeFromMessageAsync(MessageResponse msg)
+    {
+        await CopyCodeAsync(msg.CodeContent ?? string.Empty);
+    }
+
+    private async Task ToggleSaveAsync(MessageResponse msg)
+    {
+        var original = msg.IsSaved;
+        msg.IsSaved = !original;
+
+        UpdateCachedMessage(msg.Id, cached => cached.IsSaved = msg.IsSaved, CurrentConversationKey());
+        StateHasChanged();
+
+        var ok = msg.IsSaved
+            ? await SavedMessageService.SaveAsync(msg.Id)
+            : await SavedMessageService.UnsaveAsync(msg.Id);
+
+        if (ok)
+        {
+            Snackbar.Add(msg.IsSaved ? Loc.T("message.saved") : Loc.T("message.unsaved"), Severity.Success);
+            return;
+        }
+
+        msg.IsSaved = original;
+        UpdateCachedMessage(msg.Id, cached => cached.IsSaved = original, CurrentConversationKey());
+        Snackbar.Add(Loc.T("message.saveFailed"), Severity.Warning);
+        StateHasChanged();
+    }
+    private async Task LoadGroupModerationPermissionAsync(int expectedGroupId)
+    {
+        _canModerateCurrentGroup = false;
+
+        if (CurrentUserId <= 0)
+            return;
+
+        try
+        {
+            var group = await GroupService.GetGroupAsync(expectedGroupId);
+            if (GroupId != expectedGroupId)
+                return;
+
+            var me = group?.Members.FirstOrDefault(m => m.UserId == CurrentUserId);
+
+            _canModerateCurrentGroup =
+                string.Equals(me?.Role, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(me?.Role, "CoAdmin", StringComparison.OrdinalIgnoreCase);
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            _canModerateCurrentGroup = false;
+        }
+    }
+    private void StartEdit(MessageResponse msg)
+    {
+        _editId = msg.Id;
+        _editContent = msg.Content ?? "";
+        _editOpen = true;
+    }
+
+    private void CloseEditDialog()
+    {
+        _editOpen = false;
+        _editId = 0;
+        _editContent = "";
+        StateHasChanged();
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editContent))
+            return;
+
+        var contentToSave = _editContent.Trim();
+        var ok = await MsgService.EditMessageAsync(_editId, contentToSave);
+
+        if (ok)
+        {
+            var msg = messages.FirstOrDefault(m => m.Id == _editId);
+
+            if (msg != null)
+            {
+                msg.Content = contentToSave;
+                msg.IsEdited = true;
+                msg.UpdatedAt = DateTime.UtcNow;
+                UpsertMessageInCache(msg);
+            }
+
+            CloseEditDialog();
+            Snackbar.Add("Đã chỉnh sửa", Severity.Success);
+            await InvokeAsync(StateHasChanged);
+        }
+        else
+        {
+            Snackbar.Add("Chỉnh sửa thất bại", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var ok = await MsgService.DeleteMessageAsync(id);
+
+        if (ok)
+            Snackbar.Add("Đã thu hồi tin nhắn", Severity.Info);
+        else
+            Snackbar.Add("Thu hồi tin nhắn thất bại", Severity.Error);
+    }
+
+    private async Task ReactAsync(int msgId, string emoji)
+    {
+        var msg = messages.FirstOrDefault(m => m.Id == msgId);
+
+        var alreadyReacted = msg?.Reactions?
+            .Any(r => r.Emoji == emoji && r.UserIds.Contains(CurrentUserId)) == true;
+
+        bool ok;
+
+        if (alreadyReacted)
+            ok = await ReactionService.RemoveReactionAsync(msgId, emoji);
+        else
+            ok = await ReactionService.AddReactionAsync(msgId, emoji);
+
+        if (!ok)
+        {
+            Snackbar.Add("Không thể cập nhật reaction.", Severity.Warning);
+            return;
+        }
+
+        ApplyReactionLocal(msgId, emoji, !alreadyReacted);
+        StateHasChanged();
+    }
+
+    private async Task ReactFromMenuAsync(int msgId, string emoji)
+    {
+        _reactionPickerMessageId = null;
+        await ReactAsync(msgId, emoji);
+    }
+
+    private void ToggleReactionPicker(int msgId)
+    {
+        _reactionPickerMessageId = _reactionPickerMessageId == msgId ? null : msgId;
+    }
+
+    private async Task OpenForwardDialogAsync(MessageResponse msg)
+    {
+        _forwardMessageId = msg.Id;
+        _forwardSearch = "";
+        _forwardOpen = true;
+        _forwardLoading = true;
+
+        StateHasChanged();
+
+        try
+        {
+            _forwardConversations = await ConvService.GetConversationsAsync();
+        }
+        catch
+        {
+            _forwardConversations = new();
+            Snackbar.Add("Không tải được danh sách hội thoại.", Severity.Error);
+        }
+        finally
+        {
+            _forwardLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseForwardDialog()
+    {
+        _forwardOpen = false;
+        _forwardLoading = false;
+        _forwardMessageId = 0;
+        _forwardSearch = "";
+        _forwardConversations.Clear();
+        StateHasChanged();
+    }
+
+    private async Task ForwardToConversationAsync(ConversationDto conv)
+    {
+        if (_forwardMessageId <= 0)
+            return;
+
+        MessageResponse? forwarded;
+
+        if (conv.Type == "group")
+            forwarded = await MsgService.ForwardMessageAsync(_forwardMessageId, null, conv.GroupId);
+        else
+            forwarded = await MsgService.ForwardMessageAsync(_forwardMessageId, conv.PeerId, null);
+
+        if (forwarded == null)
+        {
+            Snackbar.Add("Chuyển tiếp thất bại.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Đã chuyển tiếp tin nhắn.", Severity.Success);
+        CloseForwardDialog();
+
+        if (BelongsToCurrentConversation(forwarded))
+            await AppendMessageAsync(forwarded);
+    }
+
+    private void ApplyReactionLocal(int msgId, string emoji, bool add)
+    {
+        var msg = messages.FirstOrDefault(m => m.Id == msgId);
+
+        if (msg == null)
+            return;
+
+        msg.Reactions ??= new List<ReactionSummary>();
+
+        var reaction = msg.Reactions.FirstOrDefault(r => r.Emoji == emoji);
+
+        if (add)
+        {
+            if (reaction == null)
+            {
+                reaction = new ReactionSummary
+                {
+                    Emoji = emoji,
+                    Count = 0,
+                    UserIds = new List<int>()
+                };
+
+                msg.Reactions.Add(reaction);
+            }
+
+            if (!reaction.UserIds.Contains(CurrentUserId))
+            {
+                reaction.UserIds.Add(CurrentUserId);
+                reaction.Count++;
+            }
+        }
+        else
+        {
+            if (reaction == null)
+                return;
+
+            if (reaction.UserIds.Remove(CurrentUserId))
+                reaction.Count = Math.Max(0, reaction.Count - 1);
+
+            if (reaction.Count <= 0)
+                msg.Reactions.Remove(reaction);
+        }
+
+        UpdateCachedMessage(msgId, cachedMsg =>
+        {
+            cachedMsg.Reactions = msg.Reactions;
+        });
+    }
+
+    private async Task CopyCodeAsync(string code)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
+        Snackbar.Add("Đã sao chép code", Severity.Success);
+    }
+
+    private async Task<bool> IsNearBottomAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("pingmeChatScroll.isNearBottom", "msgScroll");
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private void SetWindowToLatest()
+    {
+        _windowStartIndex = Math.Max(0, messages.Count - RenderWindowSize);
+    }
+
+    public async Task ClearCurrentCacheAsync()
+    {
+        var key = CurrentConversationKey();
+        if (key is null)
+            return;
+
+        _firstPageCache.Remove(key);
+        await MessageCache.ClearCachedMessagesAsync(key);
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("pingmeChatScroll.scrollToBottomWithRetry", "msgScroll");
+        }
+        catch
+        {
+        }
+
+        await HighlightCodeAsync();
+    }
+
+    /// <summary>
+    /// Calls highlight.js on all un-highlighted code blocks produced by Markdig.
+    /// Runs with a small delay to let Blazor flush the DOM first.
+    /// </summary>
+    private async Task HighlightCodeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("pingmeHighlight");
+        }
+        catch
+        {
+            // JS not ready (e.g. pre-render) – ignore
+        }
+    }
+
+    public void Dispose()
+    {
+        _markReadCts?.Cancel();
+        _markReadCts?.Dispose();
+        Hub.OnMessageReceived -= HandleNewMessage;
+        Hub.OnMessageEdited -= HandleEdited;
+        Hub.OnMessageDeleted -= HandleDeleted;
+        Hub.OnMessageReactionUpdated -= HandleReaction;
+        Hub.OnMessageRead -= HandleRead;
+        Hub.OnMessagePinned -= HandlePinned;
+        Loc.OnLanguageChanged -= HandleLanguageChanged;
+    }
+
+    private void HandleLanguageChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task TogglePinAsync(MessageResponse msg)
+    {
+        var newPinned = !msg.IsPinned;
+        var ok = await MsgService.PinMessageAsync(msg.Id, newPinned);
+
+        if (!ok)
+        {
+            Snackbar.Add(newPinned ? "Không thể ghim tin nhắn." : "Không thể bỏ ghim.", Severity.Warning);
+            return;
+        }
+
+        // Cập nhật optimistic; SignalR sẽ broadcast lại để đồng bộ
+        msg.IsPinned = newPinned;
+        UpdateCachedMessage(msg.Id, cachedMsg => cachedMsg.IsPinned = newPinned);
+        StateHasChanged();
+        Snackbar.Add(newPinned ? "Đã ghim tin nhắn." : "Đã bỏ ghim.", Severity.Success);
+    }
+
+    private void HandlePinned(MessagePinnedEvent data)
+    {
+        if (data == null) return;
+
+        if (data.Message != null)
+            UpsertMessageInCache(data.Message);
+        else
+            UpdateCachedMessage(data.MessageId, cachedMsg => cachedMsg.IsPinned = data.IsPinned);
+
+        // Chỉ xử lý nếu thuộc hội thoại hiện tại
+        bool belongs =
+            (GroupId.HasValue && data.GroupId == GroupId) ||
+            (PeerId.HasValue && !data.GroupId.HasValue &&
+                ((data.SenderId == CurrentUserId && data.ReceiverId == PeerId) ||
+                 (data.SenderId == PeerId && data.ReceiverId == CurrentUserId)));
+
+        if (!belongs) return;
+
+        InvokeAsync(async () =>
+        {
+            var msg = messages.FirstOrDefault(m => m.Id == data.MessageId);
+            if (msg != null)
+            {
+                msg.IsPinned = data.IsPinned;
+                UpdateCachedMessage(data.MessageId, cachedMsg => cachedMsg.IsPinned = data.IsPinned);
+                StateHasChanged();
+            }
+
+            if (OnPinChanged.HasDelegate)
+                await OnPinChanged.InvokeAsync(data);
+        });
+    }
+
+    private async Task ShowEditHistory(int messageId)
+    {
+        var history = await MsgService.GetEditHistoryAsync(messageId);
+        var parameters = new DialogParameters { ["History"] = history };
+        await DialogService.ShowAsync<EditHistoryDialog>("Lịch sử chỉnh sửa", parameters);
+    }
+
+    private static int? TryGetInt(object raw, string propertyName)
+    {
+        if (raw is System.Text.Json.JsonElement element)
+        {
+            if (element.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                element.TryGetProperty(propertyName, out var property) &&
+                property.TryGetInt32(out var value))
+            {
+                return value;
+            }
+        }
+
+        var propertyInfo = raw.GetType().GetProperty(propertyName)
+            ?? raw.GetType().GetProperty(char.ToUpperInvariant(propertyName[0]) + propertyName[1..]);
+
+        if (propertyInfo?.GetValue(raw) is int valueFromObject)
+            return valueFromObject;
+
+        return null;
+    }
+
+    private static ReminderMessagePayload? ParseReminderPayload(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<ReminderMessagePayload>(
+                content,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string FormatReminderStatus(string? status)
+    {
+        return (status ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "pending" => Loc.T("reminder.pending"),
+            "sent" => Loc.T("reminder.sent"),
+            "completed" => Loc.T("reminder.completed"),
+            "cancelled" => Loc.T("reminder.cancelled"),
+            _ => status ?? string.Empty
+        };
+    }
+
+    private sealed class ReminderMessagePayload
+    {
+        public int ReminderId { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public DateTime RemindAtUtc { get; set; }
+        public string Status { get; set; } = "Pending";
+        public int? GroupId { get; set; }
+        public int? PeerUserId { get; set; }
+        public int? SourceMessageId { get; set; }
+    }
+
+    private sealed class VulnerabilityMessagePayload
+    {
+        public int FindingId { get; set; }
+        public int GroupId { get; set; }
+        public string Severity { get; set; } = "Medium";
+        public string Status { get; set; } = "Open";
+        public string Title { get; set; } = string.Empty;
+        public string? AffectedTarget { get; set; }
+        public string? AffectedEndpoint { get; set; }
+        public string? HttpMethod { get; set; }
+        public string? Payload { get; set; }
+        public string? Url { get; set; }
+    }
+}
+
+@if (_showImageViewer && _currentImage != null)
+{
+    <div class="pm-image-viewer-backdrop" @onclick="CloseImageViewer">
+        <button type="button" class="pm-viewer-close-btn" @onclick="CloseImageViewer">
+            <MudIcon Icon="@Icons.Material.Filled.Close" />
+        </button>
+        <img src="@_currentImage.FileUrl" alt="@_currentImage.FileName" class="pm-viewer-img" @onclick:stopPropagation="true" />
+        <div class="pm-viewer-toolbar" @onclick:stopPropagation="true">
+            <span class="pm-viewer-title">@_currentImage.FileName</span>
+            <a href="@GetDownloadUrl(_currentImage)" download="@_currentImage.FileName" class="pm-viewer-download-btn">
+                <MudIcon Icon="@Icons.Material.Filled.Download" Style="color: white; font-size: 24px;" />
+            </a>
+        </div>
+    </div>
+}
+
+<style>
+    .pm-image-viewer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(4px);
+    }
+    .pm-viewer-close-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 9001;
+        transition: background 0.2s;
+    }
+    .pm-viewer-close-btn:hover {
+        background: rgba(255,255,255,0.4);
+    }
+    .pm-viewer-img {
+        max-width: 90vw;
+        max-height: 85vh;
+        object-fit: contain;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .pm-viewer-toolbar {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.6);
+        padding: 12px 24px;
+        border-radius: 30px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 9001;
+    }
+    .pm-viewer-title {
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        max-width: 300px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .pm-viewer-download-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.15);
+        transition: background 0.2s;
+    }
+    .pm-viewer-download-btn:hover {
+        background: rgba(255,255,255,0.3);
+    }
+    .pm-image-link {
+        cursor: pointer;
+        display: block;
+    }
+</style>
