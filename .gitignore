@@ -1,0 +1,35 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Secrets & env
+appsettings.*.json
+!appsettings.Development.json
+*.pfx
+
+## Uploads
+wwwroot/uploads/
+
+## Rider/VS
+.idea/
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+# Local secrets
+appsettings.Development.json
+*.user
+*.suo
+.vs/
+bin/
+obj/
+publish/
+.dotnet_home/
+wwwroot/uploads/avatars/
+wwwroot/uploads/groups/
+wwwroot/uploads/messages/
