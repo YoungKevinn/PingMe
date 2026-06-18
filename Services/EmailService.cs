@@ -9,6 +9,7 @@ public interface IEmailService
     Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetToken);
     Task SendLoginAnomalyAlertAsync(string toEmail, string toName, string newIp, string oldIp);
     Task SendOtpEmailAsync(string toEmail, string displayName, string otpCode);
+    Task SendNewPasswordEmailAsync(string toEmail, string displayName, string newPassword);
 }
 
 public class EmailService : IEmailService
@@ -135,6 +136,50 @@ public class EmailService : IEmailService
         catch (Exception ex)
         {
             _logger.LogWarning("Failed to send OTP email to {Email}: {Error}", toEmail, ex.Message);
+        }
+    }
+
+    public async Task SendNewPasswordEmailAsync(string toEmail, string displayName, string newPassword)
+    {
+        try
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("PingMe", _settings.SenderEmail));
+            message.To.Add(new MailboxAddress(displayName, toEmail));
+            message.Subject = "[PingMe] Mật khẩu mới của bạn";
+
+            message.Body = new TextPart("html")
+            {
+                Text = $@"
+<div style='font-family:sans-serif;max-width:480px;margin:auto;'>
+  <h2 style='color:#2563eb;'>PingMe</h2>
+  <p>Xin chào <b>{displayName}</b>,</p>
+  <p>Mật khẩu của bạn đã được đặt lại. Đây là mật khẩu mới để đăng nhập:</p>
+  <div style='font-size:24px;font-weight:bold;letter-spacing:2px;
+              color:#1e293b;background:#f1f5f9;padding:20px;
+              text-align:center;border-radius:8px;margin:24px 0;
+              font-family:monospace;'>
+    {newPassword}
+  </div>
+  <p>Vì lý do bảo mật, hãy <b>đăng nhập và đổi mật khẩu</b> ngay sau khi vào lại tài khoản.</p>
+  <p>Nếu bạn không yêu cầu đặt lại mật khẩu, hãy liên hệ quản trị viên ngay.</p>
+  <hr style='border:none;border-top:1px solid #e2e8f0;margin:24px 0;'/>
+  <p style='color:#94a3b8;font-size:12px;'>PingMe — DevSecOps Collaboration Platform</p>
+</div>"
+            };
+
+            using var smtp = new SmtpClient();
+            await smtp.ConnectAsync(
+                _settings.SmtpHost, _settings.SmtpPort,
+                SecureSocketOptions.StartTls);
+            await smtp.AuthenticateAsync(
+                _settings.SenderEmail, _settings.SenderPassword);
+            await smtp.SendAsync(message);
+            await smtp.DisconnectAsync(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Failed to send new-password email to {Email}: {Error}", toEmail, ex.Message);
         }
     }
 }

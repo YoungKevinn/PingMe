@@ -36,6 +36,28 @@ public class ForgotPasswordController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Tạo mật khẩu mới ngẫu nhiên, gửi về email đã đăng ký và đặt lại mật khẩu user theo mật khẩu đó.
+    /// </summary>
+    [HttpPost("send-new-password")]
+    public async Task<IActionResult> SendNewPassword([FromBody] ForgotPasswordRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { Message = "Email không hợp lệ" });
+        }
+
+        try
+        {
+            await _forgotPasswordService.ResetAndEmailNewPasswordAsync(request.Email);
+            return Ok(new { Message = "Nếu email tồn tại, mật khẩu mới đã được gửi về hộp thư của bạn." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     [HttpPost("verify")]
     public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto request)
     {
