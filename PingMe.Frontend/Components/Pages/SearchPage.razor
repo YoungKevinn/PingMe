@@ -1,0 +1,926 @@
+@page "/search"
+@attribute [Authorize]
+@using PingMe.Frontend.Helpers
+@using PingMe.Frontend.Models
+@inject SearchService SearchService
+@inject LocalizationService Loc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-5">
+    <div class="pm-search-center">
+        <div class="pm-search-heading">
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">@Loc.T("search.title")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@Loc.T("search.subtitle")</MudText>
+            </div>
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.FilterAltOff"
+                       OnClick="ClearFiltersAsync"
+                       Disabled="@_loading">
+                @Loc.T("search.clearFilters")
+            </MudButton>
+        </div>
+
+        <div class="pm-search-toolbar">
+            <MudTextField T="string"
+                          Value="@_keyword"
+                          ValueChanged="@OnKeywordChanged"
+                          Placeholder="@Loc.T("search.placeholder")"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          Class="pm-search-input" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Search"
+                       OnClick="() => SearchNowAsync()"
+                       Disabled="@_loading">
+                @Loc.T("search.title")
+            </MudButton>
+        </div>
+
+        <div class="pm-search-types">
+            @foreach (var option in _typeOptions)
+            {
+                var item = option;
+
+                <button type="button"
+                        class="@GetTypeButtonClass(item.Value)"
+                        disabled="@item.Disabled"
+                        @onclick="() => SetTypeAsync(item.Value)">
+                    @Loc.T(item.LabelKey)
+                    @if (_result?.TypeCounts != null && _result.TypeCounts.TryGetValue(item.Value, out var count))
+                    {
+                        <span>@count</span>
+                    }
+                </button>
+            }
+        </div>
+
+        <div class="pm-search-filters">
+            <label>
+                <span>@Loc.T("search.fromDate")</span>
+                <input type="date" value="@FormatDate(_fromDate)" @onchange="OnFromDateChanged" />
+            </label>
+
+            <label>
+                <span>@Loc.T("search.toDate")</span>
+                <input type="date" value="@FormatDate(_toDate)" @onchange="OnToDateChanged" />
+            </label>
+
+            <label>
+                <span>@Loc.T("search.sender")</span>
+                <input type="number" min="1" value="@_senderIdText" @oninput="OnSenderChanged" placeholder="User ID" />
+            </label>
+
+            <label>
+                <span>@Loc.T("search.scope")</span>
+                <div class="pm-scope-inputs">
+                    <input type="number" min="1" value="@_groupIdText" @oninput="OnGroupChanged" placeholder="Group ID" />
+                    <input type="number" min="1" value="@_peerUserIdText" @oninput="OnPeerChanged" placeholder="Peer ID" />
+                </div>
+            </label>
+
+            <label>
+                <span>@Loc.T("search.severity")</span>
+                <select value="@_severity" @onchange="OnSeverityChanged">
+                    <option value="">All</option>
+                    <option value="Info">Info</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="pm-search-loading">
+            <MudProgressCircular Indeterminate Color="Color.Primary" />
+            <span>@Loc.T("search.searching")</span>
+        </div>
+    }
+    else if (_result is null)
+    {
+        <div class="pm-search-empty">
+            <MudIcon Icon="@Icons.Material.Filled.ManageSearch" Size="Size.Large" />
+            <span>@Loc.T("search.placeholder")</span>
+        </div>
+    }
+    else if (!_result.Items.Any())
+    {
+        <div class="pm-search-empty">
+            <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" />
+            <span>@Loc.T("search.noResults")</span>
+        </div>
+    }
+    else
+    {
+        <div class="pm-search-result-list">
+            @foreach (var item in _result.Items)
+            {
+                var result = item;
+
+                <article class="pm-search-result-card @($"type-{result.Type}")">
+                    <div class="pm-search-result-icon">
+                        <MudIcon Icon="@GetResultIcon(result)" />
+                    </div>
+
+                    <div class="pm-search-result-main">
+                        <div class="pm-result-topline">
+                            <span class="pm-result-type">@GetTypeLabel(result.Type)</span>
+                            @if (result.CreatedAt.HasValue)
+                            {
+                                <span class="pm-result-time">@result.CreatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            }
+                        </div>
+
+                        <div class="pm-result-title-row">
+                            @if (IsAvatarResult(result) && !string.IsNullOrWhiteSpace(result.AvatarUrl))
+                            {
+                                <MudAvatar Size="Size.Small">
+                                    <MudImage Src="@UrlHelper.BuildBackendUrl(result.AvatarUrl)" />
+                                </MudAvatar>
+                            }
+
+                            <h3>@result.Title</h3>
+
+                            @if (!string.IsNullOrWhiteSpace(GetLanguage(result)))
+                            {
+                                <span class="pm-meta-chip">@GetLanguage(result)</span>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(result.Severity))
+                            {
+                                <span class="@GetSeverityClass(result.Severity)">@result.Severity</span>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(result.Status))
+                            {
+                                <span class="pm-status-chip">@result.Status</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(GetContext(result)))
+                        {
+                            <div class="pm-result-context">@GetContext(result)</div>
+                        }
+
+                        @if (result.Type == "finding" && !string.IsNullOrWhiteSpace(FormatFindingEndpoint(result)))
+                        {
+                            <div class="pm-finding-search-meta">Endpoint: @FormatFindingEndpoint(result)</div>
+                        }
+
+                        @if (result.Type == "finding" && !string.IsNullOrWhiteSpace(result.PayloadPreview))
+                        {
+                            <pre class="pm-finding-search-payload">@result.PayloadPreview</pre>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(result.Snippet) && !(result.Type == "finding" && result.Snippet == result.PayloadPreview))
+                        {
+                            <p class="pm-result-snippet">@result.Snippet</p>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(result.FileName))
+                        {
+                            <div class="pm-result-file">
+                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" />
+                                <span>@result.FileName</span>
+                                @if (!string.IsNullOrWhiteSpace(result.FileContentType))
+                                {
+                                    <small>@result.FileContentType</small>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="pm-result-actions">
+                        @if (result.Type == "attachment" && !string.IsNullOrWhiteSpace(result.FileUrl))
+                        {
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                       OnClick="() => OpenFileAsync(result)">
+                                @Loc.T("search.openFile")
+                            </MudButton>
+                        }
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.ArrowForward"
+                                   OnClick="() => OpenResult(result)">
+                            @(result.Type is "message" or "attachment" ? Loc.T("search.openMessage") : Loc.T("search.open"))
+                        </MudButton>
+                    </div>
+                </article>
+            }
+        </div>
+
+        @if (_result.Total > _result.Page * _result.PageSize)
+        {
+            <div class="pm-search-more">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           OnClick="LoadMoreAsync"
+                           Disabled="@_loading">
+                    @Loc.T("search.loadMore")
+                </MudButton>
+            </div>
+        }
+    }
+</MudContainer>
+
+<style>
+    .pm-search-center {
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 18px;
+    }
+
+    .pm-search-heading,
+    .pm-search-toolbar,
+    .pm-search-types,
+    .pm-search-filters,
+    .pm-scope-inputs,
+    .pm-result-title-row,
+    .pm-result-topline,
+    .pm-result-file,
+    .pm-result-actions,
+    .pm-search-loading,
+    .pm-search-empty,
+    .pm-search-more {
+        display: flex;
+        align-items: center;
+    }
+
+    .pm-search-heading {
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .pm-search-toolbar {
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .pm-search-input {
+        flex: 1;
+        min-width: 220px;
+    }
+
+    .pm-search-types {
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .pm-search-types button {
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+        border-radius: 999px;
+        padding: 7px 11px;
+        font-size: .86rem;
+        cursor: pointer;
+    }
+
+    .pm-search-types button.active {
+        border-color: var(--mud-palette-primary);
+        background: color-mix(in srgb, var(--mud-palette-primary) 14%, transparent);
+        color: var(--mud-palette-primary);
+        font-weight: 700;
+    }
+
+    .pm-search-types button:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    .pm-search-types button span {
+        margin-left: 6px;
+        font-size: .75rem;
+        opacity: .75;
+    }
+
+    .pm-search-filters {
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .pm-search-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 150px;
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    .pm-search-filters input,
+    .pm-search-filters select {
+        min-height: 38px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 7px 9px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        outline: none;
+    }
+
+    .pm-scope-inputs {
+        gap: 8px;
+    }
+
+    .pm-scope-inputs input {
+        width: 110px;
+    }
+
+    .pm-search-loading,
+    .pm-search-empty {
+        justify-content: center;
+        gap: 12px;
+        padding: 46px 12px;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-search-result-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .pm-search-result-card {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        background: var(--mud-palette-surface);
+    }
+
+    .pm-search-result-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+        color: var(--mud-palette-primary);
+    }
+
+    .pm-search-result-main {
+        min-width: 0;
+    }
+
+    .pm-result-topline {
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .pm-result-type {
+        font-size: .72rem;
+        font-weight: 800;
+        color: var(--mud-palette-primary);
+        text-transform: uppercase;
+    }
+
+    .pm-result-time,
+    .pm-result-context {
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+    }
+
+    .pm-result-title-row {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .pm-result-title-row h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-result-snippet {
+        margin: 6px 0 0;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+
+    .pm-finding-search-meta {
+        margin-top: 6px;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 4px 8px;
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+        font-size: .78rem;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    .pm-finding-search-payload {
+        margin: 6px 0 0;
+        max-height: 4.5em;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: rgba(15, 23, 42, .06);
+        color: var(--mud-palette-text-primary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+
+    .pm-result-file {
+        gap: 6px;
+        margin-top: 8px;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-result-file small {
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-meta-chip,
+    .pm-status-chip,
+    .pm-severity-chip {
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .72rem;
+        font-weight: 800;
+        border: 1px solid var(--mud-palette-divider);
+        color: var(--mud-palette-text-primary);
+        background: var(--mud-palette-background);
+    }
+
+    .pm-severity-info,
+    .pm-severity-low { color: #0369A1; background: #E0F2FE; border-color: #7DD3FC; }
+    .pm-severity-medium { color: #92400E; background: #FEF3C7; border-color: #FBBF24; }
+    .pm-severity-high { color: #991B1B; background: #FEE2E2; border-color: #FCA5A5; }
+    .pm-severity-critical { color: #7F1D1D; background: #FECACA; border-color: #EF4444; }
+
+    .pm-result-actions {
+        gap: 8px;
+        align-self: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .pm-search-more {
+        justify-content: center;
+        padding: 18px;
+    }
+
+    @@media (max-width: 760px) {
+        .pm-search-heading,
+        .pm-search-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .pm-search-result-card {
+            grid-template-columns: 40px minmax(0, 1fr);
+        }
+
+        .pm-result-actions {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+        }
+    }
+</style>
+
+@code {
+    private readonly TypeOption[] _typeOptions =
+    [
+        new("all", "search.typeAll"),
+        new("message", "search.typeMessage"),
+        new("user", "search.typeUser"),
+        new("group", "search.typeGroup"),
+        new("snippet", "search.typeSnippet"),
+        new("ioc", "search.typeIoc"),
+        new("attachment", "search.typeAttachment"),
+        new("finding", "search.typeFinding"),
+        new("task", "search.typeTask")
+    ];
+
+    private string _keyword = string.Empty;
+    private string _selectedType = "all";
+    private string _severity = string.Empty;
+    private string _senderIdText = string.Empty;
+    private string _groupIdText = string.Empty;
+    private string _peerUserIdText = string.Empty;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private GlobalSearchResponse? _result;
+    private bool _loading;
+    private int _page = 1;
+    private CancellationTokenSource? _debounceCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Loc.LoadAsync();
+        Loc.OnLanguageChanged += OnLanguageChanged;
+    }
+
+    private async Task OnKeywordChanged(string value)
+    {
+        _keyword = value;
+        _page = 1;
+        await DebouncedSearchAsync();
+    }
+
+    private async Task SetTypeAsync(string type)
+    {
+        _selectedType = type;
+        _page = 1;
+        await SearchNowAsync();
+    }
+
+    private async Task OnFromDateChanged(ChangeEventArgs e)
+    {
+        _fromDate = ParseDate(e.Value?.ToString());
+        _page = 1;
+        await SearchNowAsync();
+    }
+
+    private async Task OnToDateChanged(ChangeEventArgs e)
+    {
+        _toDate = ParseDate(e.Value?.ToString());
+        _page = 1;
+        await SearchNowAsync();
+    }
+
+    private async Task OnSenderChanged(ChangeEventArgs e)
+    {
+        _senderIdText = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await DebouncedSearchAsync();
+    }
+
+    private async Task OnGroupChanged(ChangeEventArgs e)
+    {
+        _groupIdText = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await DebouncedSearchAsync();
+    }
+
+    private async Task OnPeerChanged(ChangeEventArgs e)
+    {
+        _peerUserIdText = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await DebouncedSearchAsync();
+    }
+
+    private async Task OnSeverityChanged(ChangeEventArgs e)
+    {
+        _severity = e.Value?.ToString() ?? string.Empty;
+        _page = 1;
+        await SearchNowAsync();
+    }
+
+    private async Task DebouncedSearchAsync()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        try
+        {
+            await Task.Delay(400, token);
+
+            if (!token.IsCancellationRequested && ShouldSearch())
+                await SearchNowAsync(token);
+        }
+        catch (TaskCanceledException)
+        {
+        }
+    }
+
+    private async Task SearchNowAsync()
+    {
+        await SearchNowAsync(CancellationToken.None);
+    }
+
+    private async Task SearchNowAsync(CancellationToken token)
+    {
+        if (!ShouldSearch())
+        {
+            _result = null;
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            var response = await SearchService.GlobalSearchAsync(BuildRequest());
+
+            if (!token.IsCancellationRequested)
+                _result = response;
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                _loading = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_loading || _result is null)
+            return;
+
+        _page++;
+        _loading = true;
+
+        try
+        {
+            var response = await SearchService.GlobalSearchAsync(BuildRequest());
+
+            if (response is null)
+                return;
+
+            _result.Items.AddRange(response.Items);
+            _result.Total = response.Total;
+            _result.Page = response.Page;
+            _result.PageSize = response.PageSize;
+            _result.TypeCounts = response.TypeCounts;
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _keyword = string.Empty;
+        _selectedType = "all";
+        _severity = string.Empty;
+        _senderIdText = string.Empty;
+        _groupIdText = string.Empty;
+        _peerUserIdText = string.Empty;
+        _fromDate = null;
+        _toDate = null;
+        _page = 1;
+        _result = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private GlobalSearchRequest BuildRequest()
+    {
+        return new GlobalSearchRequest
+        {
+            Keyword = _keyword,
+            Type = _selectedType,
+            FromDate = _fromDate,
+            ToDate = _toDate?.Date.AddDays(1).AddTicks(-1),
+            SenderId = ParsePositiveInt(_senderIdText),
+            GroupId = ParsePositiveInt(_groupIdText),
+            PeerUserId = ParsePositiveInt(_peerUserIdText),
+            Severity = string.IsNullOrWhiteSpace(_severity) ? null : _severity,
+            Page = _page,
+            PageSize = 20
+        };
+    }
+
+    private bool ShouldSearch()
+        => !string.IsNullOrWhiteSpace(_keyword) ||
+           _fromDate.HasValue ||
+           _toDate.HasValue ||
+           ParsePositiveInt(_senderIdText).HasValue ||
+           ParsePositiveInt(_groupIdText).HasValue ||
+           ParsePositiveInt(_peerUserIdText).HasValue ||
+           !string.IsNullOrWhiteSpace(_severity);
+
+    private void OpenResult(GlobalSearchResult result)
+    {
+        switch (result.Type)
+        {
+            case "message":
+            case "attachment":
+                OpenMessage(result);
+                break;
+            case "user":
+                if (result.PeerUserId.HasValue)
+                    Nav.NavigateTo($"/chat/{result.PeerUserId.Value}");
+                break;
+            case "group":
+                if (result.GroupId.HasValue)
+                    Nav.NavigateTo($"/chat/group/{result.GroupId.Value}");
+                break;
+            case "snippet":
+                Nav.NavigateTo("/snippets");
+                break;
+            case "ioc":
+                Nav.NavigateTo(result.MessageId.HasValue ? BuildMessageUrl(result) : "/iocs");
+                break;
+            case "finding":
+                Nav.NavigateTo(result.Id > 0 ? $"/pentest?findingId={result.Id}" : "/pentest");
+                break;
+            case "task":
+                Nav.NavigateTo(result.Id > 0 ? $"/tasks?taskId={result.Id}" : "/tasks");
+                break;
+        }
+    }
+
+    private void OpenMessage(GlobalSearchResult result)
+    {
+        Nav.NavigateTo(BuildMessageUrl(result));
+    }
+
+    private string BuildMessageUrl(GlobalSearchResult result)
+    {
+        var suffix = result.MessageId.HasValue ? $"?messageId={result.MessageId.Value}" : string.Empty;
+
+        if (result.GroupId.HasValue)
+            return $"/chat/group/{result.GroupId.Value}{suffix}";
+
+        if (result.PeerUserId.HasValue)
+            return $"/chat/{result.PeerUserId.Value}{suffix}";
+
+        return "/chat";
+    }
+
+    private async Task OpenFileAsync(GlobalSearchResult result)
+    {
+        var url = UrlHelper.BuildBackendUrl(result.FileUrl);
+
+        if (!string.IsNullOrWhiteSpace(url))
+            await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private static int? ParsePositiveInt(string? value)
+    {
+        return int.TryParse(value, out var parsed) && parsed > 0 ? parsed : null;
+    }
+
+    private static DateTime? ParseDate(string? value)
+    {
+        return DateTime.TryParse(value, out var parsed) ? parsed.Date : null;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private string GetTypeButtonClass(string type)
+        => _selectedType == type ? "active" : string.Empty;
+
+    private string GetTypeLabel(string type)
+        => type switch
+        {
+            "message" => Loc.T("search.typeMessage"),
+            "user" => Loc.T("search.typeUser"),
+            "group" => Loc.T("search.typeGroup"),
+            "snippet" => Loc.T("search.typeSnippet"),
+            "ioc" => Loc.T("search.typeIoc"),
+            "attachment" => Loc.T("search.typeAttachment"),
+            "finding" => Loc.T("search.typeFinding"),
+            "task" => Loc.T("search.typeTask"),
+            _ => Loc.T("search.typeAll")
+        };
+
+    private static string GetResultIcon(GlobalSearchResult result)
+        => result.Type switch
+        {
+            "message" => Icons.Material.Filled.Chat,
+            "user" => Icons.Material.Filled.Person,
+            "group" => Icons.Material.Filled.Groups,
+            "snippet" => Icons.Material.Filled.Code,
+            "ioc" => Icons.Material.Filled.Security,
+            "finding" => Icons.Material.Filled.BugReport,
+            "task" => Icons.Material.Filled.TaskAlt,
+            "attachment" => result.FileContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true
+                ? Icons.Material.Filled.Image
+                : Icons.Material.Filled.AttachFile,
+            _ => Icons.Material.Filled.Search
+        };
+
+    private static bool IsAvatarResult(GlobalSearchResult result)
+        => result.Type is "user" or "group";
+
+    private static string? GetLanguage(GlobalSearchResult result)
+    {
+        if (result.Metadata != null && result.Metadata.TryGetValue("language", out var language))
+            return language;
+
+        return null;
+    }
+
+    private string GetContext(GlobalSearchResult result)
+    {
+        if (result.Type is "message" or "attachment")
+        {
+            var sender = string.IsNullOrWhiteSpace(result.SenderName)
+                ? "Unknown"
+                : result.SenderName;
+            var messageId = FormatSearchText("search.messageId", result.MessageId?.ToString() ?? "?");
+
+            if (!string.IsNullOrWhiteSpace(result.GroupName))
+                return string.Join(" · ",
+                    FormatSearchText("search.groupContext", result.GroupName),
+                    FormatSearchText("search.senderContext", sender),
+                    messageId);
+
+            if (!string.IsNullOrWhiteSpace(result.PeerName))
+                return string.Join(" · ",
+                    FormatSearchText("search.dmWith", result.PeerName),
+                    FormatSearchText("search.senderContext", sender),
+                    messageId);
+
+            if (result.PeerUserId.HasValue)
+                return string.Join(" · ",
+                    "DM",
+                    FormatSearchText("search.senderContext", sender),
+                    messageId);
+
+            return string.Join(" · ",
+                FormatSearchText("search.senderContext", sender),
+                messageId);
+        }
+
+        if (result.Type == "ioc")
+        {
+            var parts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(result.GroupName))
+                parts.Add(FormatSearchText("search.groupContext", result.GroupName));
+            else if (!string.IsNullOrWhiteSpace(result.PeerName))
+                parts.Add(FormatSearchText("search.dmWith", result.PeerName));
+
+            if (result.MessageId.HasValue)
+                parts.Add(FormatSearchText("search.messageId", result.MessageId.Value.ToString()));
+
+            return string.Join(" · ", parts);
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.GroupName))
+            return FormatSearchText("search.groupContext", result.GroupName);
+
+        if (!string.IsNullOrWhiteSpace(result.SenderName))
+            return FormatSearchText("search.senderContext", result.SenderName);
+
+        return string.Empty;
+    }
+
+    private static string? FormatFindingEndpoint(GlobalSearchResult result)
+    {
+        if (string.IsNullOrWhiteSpace(result.AffectedEndpoint))
+            return null;
+
+        return string.IsNullOrWhiteSpace(result.HttpMethod)
+            ? result.AffectedEndpoint.Trim()
+            : $"{result.HttpMethod.Trim().ToUpperInvariant()} {result.AffectedEndpoint.Trim()}";
+    }
+
+    private string FormatSearchText(string key, string value)
+        => string.Format(Loc.T(key), value);
+
+    private static string GetSeverityClass(string? severity)
+        => $"pm-severity-chip pm-severity-{(severity ?? string.Empty).Trim().ToLowerInvariant()}";
+
+    private void OnLanguageChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= OnLanguageChanged;
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+    }
+
+    private sealed record TypeOption(string Value, string LabelKey, bool Disabled = false);
+}

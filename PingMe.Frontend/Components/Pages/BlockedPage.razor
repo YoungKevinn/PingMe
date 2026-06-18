@@ -1,0 +1,423 @@
+@page "/blocked"
+@attribute [Authorize]
+@implements IDisposable
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Services
+@inject BlockService BlockService
+@inject SearchService SearchService
+@inject LocalizationService Loc
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <div class="pm-blocked-page">
+
+        <div class="pm-blocked-header">
+            <div>
+                <MudText Typo="Typo.h5" Class="font-weight-bold">
+                    @Loc.T("blocked.title")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @Loc.T("blocked.subtitle")
+                </MudText>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div style="display:flex;justify-content:center;padding:32px;">
+                <MudProgressCircular Indeterminate Color="Color.Primary" />
+            </div>
+        }
+        else if (!_blocked.Any())
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                @Loc.T("blocked.empty")
+            </MudAlert>
+        }
+        else
+        {
+            <MudPaper Outlined="true" Class="pm-blocked-list">
+                @foreach (var b in _blocked)
+                {
+                    var item = b;
+
+                    <div class="pm-blocked-item">
+                        <div class="pm-blocked-user">
+                            <MudAvatar Color="Color.Error" Size="Size.Medium">
+                                @if (!string.IsNullOrEmpty(item.AvatarUrl))
+                                {
+                                    <MudImage Src="@($"http://localhost:5000{item.AvatarUrl}")" />
+                                }
+                                else
+                                {
+                                    @item.DisplayName.FirstOrDefault()
+                                }
+                            </MudAvatar>
+
+                            <div style="min-width:0;flex:1;">
+                                <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                    @item.DisplayName
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @Loc.T("blocked.blockedAt") @item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </MudText>
+                            </div>
+                        </div>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Success"
+                                   Size="Size.Small"
+                                   OnClick="() => UnblockAsync(item.BlockedUserId)">
+                            @Loc.T("blocked.unblock")
+                        </MudButton>
+                    </div>
+                }
+            </MudPaper>
+        }
+
+        <MudPaper Class="pa-4 mt-5" Outlined="true">
+            <MudText Typo="Typo.h6" Class="mb-1">
+                @Loc.T("blocked.blockUserTitle")
+            </MudText>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                @Loc.T("blocked.blockUserSubtitle")
+            </MudText>
+
+            <MudTextField T="string"
+                          Value="@_blockSearch"
+                          ValueChanged="OnBlockUserSearchChanged"
+                          Label="@Loc.T("blocked.searchPlaceholder")"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true"
+                          FullWidth="true" />
+
+            @if (_searchingBlockUser)
+            {
+                <div style="display:flex;justify-content:center;padding:16px;">
+                    <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Primary" />
+                </div>
+            }
+            else if (_blockSearchResults.Any())
+            {
+                <div class="pm-block-search-results">
+                    @foreach (var user in _blockSearchResults)
+                    {
+                        var u = user;
+
+                        <button type="button"
+                                class="pm-block-user-result @(_selectedBlockUser?.Id == u.Id ? "active" : "")"
+                                @onclick="() => SelectBlockUser(u)">
+                            <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                @u.DisplayName.FirstOrDefault()
+                            </MudAvatar>
+
+                            <div style="min-width:0;text-align:left;flex:1;">
+                                <div class="pm-block-user-name">
+                                    @u.DisplayName
+                                </div>
+
+                                <div class="pm-block-user-username">
+                                    @@@u.Username
+                                </div>
+                            </div>
+
+                            @if (_selectedBlockUser?.Id == u.Id)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle"
+                                         Color="Color.Error"
+                                         Style="font-size:20px;" />
+                            }
+                        </button>
+                    }
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_blockSearch))
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-3">
+                    @Loc.T("blocked.noResults")
+                </MudAlert>
+            }
+
+            @if (_selectedBlockUser != null)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-3">
+                    @Loc.T("blocked.selectedToBlock")
+                    <b>@_selectedBlockUser.DisplayName</b>
+                    (@@@_selectedBlockUser.Username)
+                </MudAlert>
+            }
+
+            <div class="pm-block-actions">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           Disabled="@(_selectedBlockUser == null && string.IsNullOrWhiteSpace(_blockSearch))"
+                           OnClick="ClearBlockSelection">
+                    @Loc.T("blocked.clearSelection")
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Error"
+                           Disabled="@(_selectedBlockUser == null || _blocking)"
+                           OnClick="BlockSelectedUserAsync">
+                    @if (_blocking)
+                    {
+                        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+                        <span>@Loc.T("blocked.blocking")</span>
+                    }
+                    else
+                    {
+                        <span>@Loc.T("blocked.block")</span>
+                    }
+                </MudButton>
+            </div>
+        </MudPaper>
+    </div>
+</MudContainer>
+
+<style>
+    .pm-blocked-page {
+        padding-bottom: 32px;
+    }
+
+    .pm-blocked-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .pm-blocked-list {
+        overflow: hidden;
+        border-radius: 18px;
+        background: var(--mud-palette-surface);
+    }
+
+    .pm-blocked-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+        .pm-blocked-item:last-child {
+            border-bottom: none;
+        }
+
+    .pm-blocked-user {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .pm-block-search-results {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 14px;
+        max-height: 360px;
+        overflow: auto;
+    }
+
+    .pm-block-user-result {
+        width: 100%;
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border-radius: 14px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: .15s ease;
+    }
+
+        .pm-block-user-result:hover {
+            background: rgba(59, 130, 246, .10);
+            border-color: rgba(59, 130, 246, .30);
+        }
+
+        .pm-block-user-result.active {
+            background: rgba(239, 68, 68, .12);
+            border-color: rgba(239, 68, 68, .45);
+        }
+
+    .pm-block-user-name {
+        font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-block-user-username {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pm-block-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    @@media (max-width: 600px) {
+        .pm-blocked-item {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .pm-block-actions {
+            justify-content: stretch;
+            flex-direction: column-reverse;
+        }
+
+            .pm-block-actions .mud-button-root {
+                width: 100%;
+            }
+    }
+</style>
+
+@code {
+    private List<BlockResponse> _blocked = new();
+    private bool _loading = true;
+    private bool _blocking;
+
+    private string _blockSearch = "";
+    private bool _searchingBlockUser;
+    private List<UserSearchResult> _blockSearchResults = new();
+    private UserSearchResult? _selectedBlockUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnLanguageChanged += StateHasChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _blocked = await BlockService.GetBlockedUsersAsync() ?? new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnBlockUserSearchChanged(string value)
+    {
+        _blockSearch = value;
+        _selectedBlockUser = null;
+
+        if (string.IsNullOrWhiteSpace(_blockSearch))
+        {
+            _blockSearchResults.Clear();
+            return;
+        }
+
+        _searchingBlockUser = true;
+
+        try
+        {
+            var result = await SearchService.SearchAsync(_blockSearch, 8);
+            var users = result?.Users ?? new List<UserSearchResult>();
+
+            var blockedIds = _blocked.Select(x => x.BlockedUserId).ToHashSet();
+
+            _blockSearchResults = users
+                .Where(u => !blockedIds.Contains(u.Id))
+                .ToList();
+        }
+        catch
+        {
+            _blockSearchResults.Clear();
+            Snackbar.Add("Không tìm kiếm được người dùng.", Severity.Error);
+        }
+        finally
+        {
+            _searchingBlockUser = false;
+        }
+    }
+
+    private void SelectBlockUser(UserSearchResult user)
+    {
+        _selectedBlockUser = user;
+    }
+
+    private void ClearBlockSelection()
+    {
+        _blockSearch = string.Empty;
+        _selectedBlockUser = null;
+        _blockSearchResults.Clear();
+    }
+
+    private async Task UnblockAsync(int userId)
+    {
+        var ok = await BlockService.UnblockUserAsync(userId);
+
+        if (ok)
+        {
+            Snackbar.Add("Đã bỏ chặn", Severity.Success);
+            await LoadAsync();
+        }
+        else
+        {
+            Snackbar.Add("Bỏ chặn thất bại", Severity.Error);
+        }
+    }
+
+    private async Task BlockSelectedUserAsync()
+    {
+        if (_selectedBlockUser == null)
+            return;
+
+        _blocking = true;
+
+        try
+        {
+            var ok = await BlockService.BlockUserAsync(_selectedBlockUser.Id);
+
+            if (ok)
+            {
+                Snackbar.Add($"Đã chặn {_selectedBlockUser.DisplayName}", Severity.Success);
+
+                _blockSearch = string.Empty;
+                _selectedBlockUser = null;
+                _blockSearchResults.Clear();
+
+                await LoadAsync();
+            }
+            else
+            {
+                Snackbar.Add("Chặn thất bại", Severity.Error);
+            }
+        }
+        finally
+        {
+            _blocking = false;
+        }
+    }
+}

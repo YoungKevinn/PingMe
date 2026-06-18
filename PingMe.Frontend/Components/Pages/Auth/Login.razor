@@ -1,0 +1,115 @@
+@page "/login"
+@using PingMe.Frontend.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject CustomAuthStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+
+<div class="pm-auth-wrapper">
+    <div class="pm-auth-card">
+        <!-- Logo -->
+        <div class="pm-auth-logo">
+            <div class="pm-auth-logo-icon">
+                <MudIcon Icon="@Icons.Material.Filled.Forum" Style="color:white;font-size:32px;" />
+            </div>
+            <div class="pm-auth-heading">
+                <p class="pm-auth-title">Chào mừng trở lại</p>
+                <p class="pm-auth-subtitle">Đăng nhập vào PingMe</p>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <MudForm @ref="form" @bind-IsValid="isValid">
+            <MudTextField @bind-Value="model.Email"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Email"
+                          For="@(() => model.Email)"
+                          Required="true"
+                          RequiredError="Vui lòng nhập email"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="model.Password"
+                          Label="Mật khẩu"
+                          Variant="Variant.Outlined"
+                          InputType="@(showPw ? InputType.Text : InputType.Password)"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(showPw ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                          OnAdornmentClick="() => showPw = !showPw"
+                          For="@(() => model.Password)"
+                          Required="true"
+                          RequiredError="Vui lòng nhập mật khẩu"
+                          Class="mb-1" />
+
+            <div style="text-align:right;margin-bottom:20px;">
+                <MudLink Href="/forgot-password" Typo="Typo.body2">Quên mật khẩu?</MudLink>
+            </div>
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="LoginAsync"
+                       Disabled="@_loading"
+                       Style="height:48px;font-size:1rem;font-weight:600;">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" Class="mr-2" />
+                    <span>Đang đăng nhập...</span>
+                }
+                else
+                {
+                    <span>Đăng nhập</span>
+                }
+            </MudButton>
+        </MudForm>
+
+        <div class="pm-auth-divider"><span>hoặc</span></div>
+
+        <div style="text-align:center;">
+            <MudText Typo="Typo.body2" Style="color:#64748B;">
+                Chưa có tài khoản?
+                <MudLink Href="/register" Style="font-weight:600;">Đăng ký ngay</MudLink>
+            </MudText>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest model = new();
+    private MudForm? form;
+    private bool isValid;
+    private bool showPw;
+    private bool _loading;
+
+    private async Task LoginAsync()
+    {
+        if (form == null) return;
+        await form.Validate();
+        if (!form.IsValid) return;
+        _loading = true;
+        try
+        {
+            var result = await AuthService.LoginAsync(model);
+            if (result != null)
+            {
+                AuthStateProvider.NotifyUserLoggedIn();
+                Snackbar.Add("Đăng nhập thành công!", Severity.Success);
+                Nav.NavigateTo("/chat");
+            }
+            else
+            {
+                Snackbar.Add("Email hoặc mật khẩu không đúng", Severity.Error);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

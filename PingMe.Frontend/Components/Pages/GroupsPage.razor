@@ -1,0 +1,471 @@
+@page "/groups"
+@attribute [Authorize]
+@using PingMe.Frontend.Models
+@inject GroupService GroupService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject SearchService SearchService
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h5" Class="font-weight-bold">👥 Nhóm của tôi</MudText>
+
+        <MudButton StartIcon="@Icons.Material.Filled.GroupAdd"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="@OpenCreateDialog">
+            Tạo nhóm mới
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate />
+    }
+    else if (!_groups.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            Bạn chưa có nhóm nào. Hãy tạo nhóm mới!
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var g in _groups)
+            {
+                var gid = g.Id;
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Outlined="true">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudAvatar Color="Color.Primary">
+                                    @if (!string.IsNullOrEmpty(g.AvatarUrl))
+                                    {
+                                        <MudImage Src="@($"http://localhost:5000{g.AvatarUrl}")" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Group" />
+                                    }
+                                </MudAvatar>
+                            </CardHeaderAvatar>
+
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1" Class="font-weight-bold">
+                                    @g.Name
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @g.Members.Count thành viên
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @(g.Description ?? "Không có mô tả")
+                            </MudText>
+                        </MudCardContent>
+
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.Chat"
+                                       Size="Size.Small"
+                                       OnClick="() => GoToChat(gid)">
+                                Nhắn tin
+                            </MudButton>
+
+                            <MudButton StartIcon="@Icons.Material.Filled.Settings"
+                                       Size="Size.Small"
+                                       OnClick="() => GoToDetail(gid)">
+                                Quản lý
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@if (_createOpen)
+{
+    <div class="pm-modal-backdrop" @onclick="CloseCreateDialog">
+        <div class="pm-create-group-modal" @onclick:stopPropagation="true">
+            <div class="pm-modal-header">
+                <MudText Typo="Typo.h6" Class="font-weight-bold">
+                    Tạo nhóm mới
+                </MudText>
+
+                <button type="button"
+                        class="pm-modal-close"
+                        @onclick="CloseCreateDialog">
+                    ×
+                </button>
+            </div>
+
+            <div class="pm-modal-body">
+                <MudTextField @bind-Value="_newGroup.Name"
+                              Label="Tên nhóm *"
+                              Variant="Variant.Outlined"
+                              Class="mb-3"
+                              Required="true"
+                              Immediate="true" />
+
+                <MudTextField @bind-Value="_newGroup.Description"
+                              Label="Mô tả"
+                              Variant="Variant.Outlined"
+                              Lines="2"
+                              Class="mb-3"
+                              Immediate="true" />
+
+                <MudDivider Class="my-3" />
+
+                <MudText Typo="Typo.subtitle2" Class="mb-2 font-weight-bold">
+                    Thêm thành viên
+                </MudText>
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                    <MudTextField @bind-Value="_memberSearchTerm"
+                                  Label="Tìm theo tên hoặc username"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Immediate="true"
+                                  Style="flex:1;" />
+
+                    <MudButton ButtonType="ButtonType.Button"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(_memberSearchLoading || string.IsNullOrWhiteSpace(_memberSearchTerm))"
+                               OnClick="SearchMembersAsync">
+                        @if (_memberSearchLoading)
+                        {
+                            <MudProgressCircular Size="Size.Small"
+                                                 Indeterminate="true"
+                                                 Color="Color.Inherit" />
+                        }
+                        else
+                        {
+                            <span>Tìm</span>
+                        }
+                    </MudButton>
+                </MudStack>
+
+                @if (_selectedMembers.Any())
+                {
+                    <MudPaper Class="pa-2 mb-2" Outlined="true">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                            Đã chọn @_selectedMembers.Count thành viên
+                        </MudText>
+
+                        @foreach (var user in _selectedMembers)
+                        {
+                            var selectedUser = user;
+
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-1">
+                                <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                    @selectedUser.DisplayName.FirstOrDefault()
+                                </MudAvatar>
+
+                                <div style="flex:1;min-width:0;">
+                                    <MudText Typo="Typo.body2">
+                                        @selectedUser.DisplayName
+                                    </MudText>
+
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @@@selectedUser.Username
+                                    </MudText>
+                                </div>
+
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="() => RemoveSelectedMember(selectedUser.Id)" />
+                            </MudStack>
+                        }
+                    </MudPaper>
+                }
+
+                @if (_memberSearchResults.Any())
+                {
+                    <MudPaper Class="pa-2" Outlined="true">
+                        @foreach (var user in _memberSearchResults)
+                        {
+                            var foundUser = user;
+
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudAvatar Size="Size.Small" Color="Color.Secondary">
+                                    @foundUser.DisplayName.FirstOrDefault()
+                                </MudAvatar>
+
+                                <div style="flex:1;min-width:0;">
+                                    <MudText Typo="Typo.body2">
+                                        @foundUser.DisplayName
+                                    </MudText>
+
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @@@foundUser.Username
+                                    </MudText>
+                                </div>
+
+                                <MudButton ButtonType="ButtonType.Button"
+                                           Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Primary"
+                                           OnClick="() => AddSelectedMember(foundUser)">
+                                    Chọn
+                                </MudButton>
+                            </MudStack>
+                        }
+                    </MudPaper>
+                }
+            </div>
+
+            <div class="pm-modal-actions">
+                <MudButton ButtonType="ButtonType.Button"
+                           Disabled="@_creatingGroup"
+                           OnClick="CloseCreateDialog">
+                    Hủy
+                </MudButton>
+
+                <MudButton ButtonType="ButtonType.Button"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@(_creatingGroup || string.IsNullOrWhiteSpace(_newGroup.Name))"
+                           OnClick="CreateGroupAsync">
+                    @if (_creatingGroup)
+                    {
+                        <MudProgressCircular Size="Size.Small"
+                                             Indeterminate="true"
+                                             Color="Color.Inherit" />
+                    }
+                    else
+                    {
+                        <span>Tạo nhóm</span>
+                    }
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .pm-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, .55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+
+    .pm-create-group-modal {
+        width: min(430px, 100%);
+        max-height: calc(100vh - 48px);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 14px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, .45);
+    }
+
+    .pm-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 22px 10px;
+        flex-shrink: 0;
+    }
+
+    .pm-modal-close {
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mud-palette-text-secondary);
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+        .pm-modal-close:hover {
+            background: rgba(148, 163, 184, .16);
+            color: var(--mud-palette-text-primary);
+        }
+
+    .pm-modal-body {
+        padding: 8px 22px 16px;
+        overflow-y: auto;
+    }
+
+    .pm-modal-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 22px 18px;
+        border-top: 1px solid var(--mud-palette-divider);
+        flex-shrink: 0;
+    }
+</style>
+
+@code {
+    private List<GroupResponse> _groups = new();
+    private bool _loading = true;
+    private bool _createOpen;
+    private bool _creatingGroup;
+
+    private CreateGroupRequest _newGroup = new();
+    private string _memberSearchTerm = "";
+    private bool _memberSearchLoading;
+    private List<UserSearchResult> _memberSearchResults = new();
+    private List<UserSearchResult> _selectedMembers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _groups = await GroupService.GetMyGroupsAsync() ?? new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        ResetCreateForm();
+        _createOpen = true;
+    }
+
+    private void CloseCreateDialog()
+    {
+        if (_creatingGroup)
+            return;
+
+        _createOpen = false;
+        ResetCreateForm();
+        StateHasChanged();
+    }
+
+    private void ResetCreateForm()
+    {
+        _newGroup = new CreateGroupRequest();
+        _memberSearchTerm = string.Empty;
+        _memberSearchResults.Clear();
+        _selectedMembers.Clear();
+        _memberSearchLoading = false;
+    }
+
+    private void GoToChat(int groupId)
+    {
+        Nav.NavigateTo($"/chat/group/{groupId}");
+    }
+
+    private void GoToDetail(int groupId)
+    {
+        Nav.NavigateTo($"/groups/{groupId}");
+    }
+
+    private async Task SearchMembersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_memberSearchTerm))
+        {
+            _memberSearchResults.Clear();
+            return;
+        }
+
+        _memberSearchLoading = true;
+
+        try
+        {
+            var result = await SearchService.SearchAsync(_memberSearchTerm, 10);
+
+            _memberSearchResults = (result?.Users ?? new List<UserSearchResult>())
+                .Where(u => !_selectedMembers.Any(s => s.Id == u.Id))
+                .ToList();
+        }
+        finally
+        {
+            _memberSearchLoading = false;
+        }
+    }
+
+    private void AddSelectedMember(UserSearchResult user)
+    {
+        if (_selectedMembers.Any(x => x.Id == user.Id))
+            return;
+
+        _selectedMembers.Add(user);
+        _memberSearchResults.RemoveAll(x => x.Id == user.Id);
+        _memberSearchTerm = string.Empty;
+    }
+
+    private void RemoveSelectedMember(int userId)
+    {
+        _selectedMembers.RemoveAll(x => x.Id == userId);
+    }
+
+    private async Task CreateGroupAsync()
+    {
+        if (_creatingGroup)
+            return;
+
+        if (string.IsNullOrWhiteSpace(_newGroup.Name))
+        {
+            Snackbar.Add("Vui lòng nhập tên nhóm.", Severity.Warning);
+            return;
+        }
+
+        _creatingGroup = true;
+
+        try
+        {
+            _newGroup.MemberIds = _selectedMembers
+                .Select(x => x.Id)
+                .Distinct()
+                .ToList();
+
+            var result = await GroupService.CreateGroupAsync(_newGroup);
+
+            if (result == null)
+            {
+                Snackbar.Add("Tạo nhóm thất bại.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add("Tạo nhóm thành công!", Severity.Success);
+
+            _createOpen = false;
+            ResetCreateForm();
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Tạo nhóm thất bại: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _creatingGroup = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

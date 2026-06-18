@@ -1,0 +1,538 @@
+@page "/friends"
+@attribute [Authorize]
+@implements IDisposable
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Services
+@inject FriendService FriendService
+@inject SearchService SearchService
+@inject LocalizationService Loc
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">👥 @Loc.T("friends.title")</MudText>
+
+    <MudPaper Elevation="1" Class="pa-3 mb-4">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">🔎 @Loc.T("friends.searchNew")</MudText>
+
+        <MudTextField T="string"
+                      Value="@searchQuery"
+                      ValueChanged="@OnSearchQueryChanged"
+                      Placeholder="@Loc.T("friends.searchPlaceholder")"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      DebounceInterval="400"
+                      Immediate="true"
+                      Clearable="true" />
+
+        @if (isSearching)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-2" />
+        }
+        else if (!string.IsNullOrWhiteSpace(searchQuery) && searchResults.Count == 0)
+        {
+            <MudText Class="mt-3" Color="Color.Secondary" Typo="Typo.body2">
+                @string.Format(Loc.T("friends.noResults"), searchQuery)
+            </MudText>
+        }
+        else if (searchResults.Count > 0)
+        {
+            <MudList T="UserSearchResult" Dense="true" Class="mt-2">
+                @foreach (var u in searchResults)
+                {
+                    var avatarUrl = BuildAvatarUrl(u.AvatarUrl);
+
+                    <MudListItem T="UserSearchResult" Value="u">
+                        <div class="pm-friend-row">
+                            <MudAvatar Size="Size.Medium"
+                                       Color="Color.Primary"
+                                       Class="pm-friend-avatar">
+                                @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                                {
+                                    <img src="@avatarUrl"
+                                         alt="@u.DisplayName"
+                                         class="pm-friend-avatar-img"
+                                         onerror="this.style.display='none'; this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                                }
+
+                                <span class="pm-avatar-initial">
+                                    @GetAvatarInitial(u.DisplayName)
+                                </span>
+                            </MudAvatar>
+
+                            <div class="pm-friend-info">
+                                <MudText Typo="Typo.body1" Class="pm-friend-name">
+                                    @u.DisplayName
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @($"@{u.Username}") · @(u.IsOnline ? "🟢 Online" : "⚫ Offline")
+                                </MudText>
+                            </div>
+
+                            <MudTooltip Text="@Loc.T("friends.sendRequest")">
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
+                                               Color="Color.Primary"
+                                               Disabled="@sentRequestIds.Contains(u.Id)"
+                                               OnClick="@(() => SendRequest(u.Id))" />
+                            </MudTooltip>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    </MudPaper>
+
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="font-weight-bold">
+        <MudTabPanel Text="@Loc.T("friends.tabFriends")">
+            @if (loadingFriends)
+            {
+                <MudProgressCircular Indeterminate />
+            }
+            else if (!friends.Any())
+            {
+                <MudAlert Severity="Severity.Info">@Loc.T("friends.noFriends")</MudAlert>
+            }
+            else
+            {
+                <MudGrid>
+                    @foreach (var f in friends)
+                    {
+                        var avatarUrl = BuildAvatarUrl(f.AvatarUrl);
+
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Class="pm-friend-card">
+                                <MudCardContent>
+                                    <div class="pm-friend-row">
+                                        <MudAvatar Size="Size.Medium"
+                                                   Color="Color.Primary"
+                                                   Class="pm-friend-avatar">
+                                            @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                                            {
+                                                <img src="@avatarUrl"
+                                                     alt="@f.DisplayName"
+                                                     class="pm-friend-avatar-img"
+                                                     onerror="this.style.display='none'; this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                                            }
+
+                                            <span class="pm-avatar-initial">
+                                                @GetAvatarInitial(f.DisplayName)
+                                            </span>
+                                        </MudAvatar>
+
+                                        <div class="pm-friend-info">
+                                            <MudText Typo="Typo.body1" Class="pm-friend-name">
+                                                @f.DisplayName
+                                            </MudText>
+
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @(f.IsOnline ? "🟢 Online" : "⚫ Offline")
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                </MudCardContent>
+
+                                <MudCardActions>
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Primary"
+                                               OnClick='@(() => Nav.NavigateTo($"/chat/{f.UserId}"))'>
+                                        💬 @Loc.T("friends.message")
+                                    </MudButton>
+
+                                    <MudButton Variant="Variant.Text"
+                                               Color="Color.Error"
+                                               OnClick="@(() => RemoveFriend(f.UserId))">
+                                        ❌ @Loc.T("friends.remove")
+                                    </MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="@Loc.T("friends.tabReceived")">
+            @if (loadingRequests)
+            {
+                <MudProgressCircular Indeterminate />
+            }
+            else if (!pendingRequests.Any())
+            {
+                <MudAlert Severity="Severity.Info">@Loc.T("friends.noReceived")</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@pendingRequests" Hover="true">
+                    <HeaderContent>
+                        <MudTh>@Loc.T("friends.sender")</MudTh>
+                        <MudTh>@Loc.T("friends.time")</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+
+                    <RowTemplate>
+                        <MudTd>@context.FromUserName</MudTd>
+                        <MudTd>@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                           Color="Color.Success"
+                                           OnClick="@(() => AcceptRequest(context.Id))" />
+
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Color="Color.Error"
+                                           OnClick="@(() => DeclineRequest(context.Id))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+
+        <MudTabPanel Text="@Loc.T("friends.tabSent")">
+            @if (loadingSent)
+            {
+                <MudProgressCircular Indeterminate />
+            }
+            else if (!sentRequests.Any())
+            {
+                <MudAlert Severity="Severity.Info">@Loc.T("friends.noSent")</MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@sentRequests" Hover="true">
+                    <HeaderContent>
+                        <MudTh>@Loc.T("friends.receiver")</MudTh>
+                        <MudTh>@Loc.T("friends.time")</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+
+                    <RowTemplate>
+                        <MudTd>@context.ToUserName</MudTd>
+                        <MudTd>@context.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                           Color="Color.Warning"
+                                           OnClick="@(() => CancelRequest(context.Id))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+<style>
+    .pm-friend-row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+    }
+
+    .pm-friend-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .pm-friend-name {
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pm-friend-card {
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .pm-friend-avatar {
+        position: relative;
+        overflow: hidden;
+        font-weight: 800;
+        flex-shrink: 0;
+        background: linear-gradient(135deg, #2563EB, #3B82F6) !important;
+        color: white !important;
+    }
+
+    .pm-friend-avatar-img {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 999px;
+        background: transparent;
+    }
+
+    .pm-avatar-initial {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        color: white;
+        text-transform: uppercase;
+    }
+
+    .pm-friend-avatar.pm-avatar-fallback-active .pm-avatar-initial {
+        z-index: 3;
+    }
+</style>
+
+@code {
+    private const string BackendBaseUrl = "http://localhost:5000";
+
+    private List<FriendResponseDto> friends = new();
+    private List<FriendRequestDto> pendingRequests = new();
+    private List<FriendRequestDto> sentRequests = new();
+
+    private bool loadingFriends = true;
+    private bool loadingRequests = true;
+    private bool loadingSent = true;
+
+    private string searchQuery = string.Empty;
+    private List<UserSearchResult> searchResults = new();
+    private bool isSearching = false;
+    private HashSet<int> sentRequestIds = new();
+
+    private long _avatarVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnLanguageChanged += StateHasChanged;
+        _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await LoadAll();
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= StateHasChanged;
+    }
+
+    private async Task OnSearchQueryChanged(string newValue)
+    {
+        searchQuery = newValue ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            searchResults.Clear();
+            isSearching = false;
+            StateHasChanged();
+            return;
+        }
+
+        isSearching = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await SearchService.SearchAsync(searchQuery, 20);
+            searchResults = result?.Users ?? new List<UserSearchResult>();
+
+            var friendIds = friends.Select(f => f.UserId).ToHashSet();
+            var sentIds = sentRequests.Select(r => r.ToUserId).ToHashSet();
+
+            sentRequestIds = sentIds;
+            searchResults = searchResults
+                .Where(u => !friendIds.Contains(u.Id))
+                .ToList();
+        }
+        catch
+        {
+            searchResults.Clear();
+            Snackbar.Add("Không thể tìm kiếm người dùng.", Severity.Error);
+        }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendRequest(int targetUserId)
+    {
+        if (sentRequestIds.Contains(targetUserId))
+            return;
+
+        var (ok, error) = await FriendService.SendFriendRequestAsync(targetUserId);
+
+        if (ok)
+        {
+            sentRequestIds.Add(targetUserId);
+            Snackbar.Add("Đã gửi lời mời kết bạn", Severity.Success);
+            await LoadSentRequests();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Không thể gửi lời mời.", Severity.Warning);
+        }
+    }
+
+    private async Task LoadAll()
+    {
+        await Task.WhenAll(
+            LoadFriends(),
+            LoadPendingRequests(),
+            LoadSentRequests()
+        );
+    }
+
+    private async Task LoadFriends()
+    {
+        loadingFriends = true;
+
+        try
+        {
+            friends = await FriendService.GetFriendsAsync();
+        }
+        catch
+        {
+            friends = new();
+            Snackbar.Add("Không thể tải danh sách bạn bè.", Severity.Error);
+        }
+        finally
+        {
+            loadingFriends = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadPendingRequests()
+    {
+        loadingRequests = true;
+
+        try
+        {
+            pendingRequests = await FriendService.GetPendingRequestsAsync();
+        }
+        catch
+        {
+            pendingRequests = new();
+            Snackbar.Add("Không thể tải lời mời nhận.", Severity.Error);
+        }
+        finally
+        {
+            loadingRequests = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadSentRequests()
+    {
+        loadingSent = true;
+
+        try
+        {
+            sentRequests = await FriendService.GetSentRequestsAsync();
+            sentRequestIds = sentRequests
+                .Select(r => r.ToUserId)
+                .ToHashSet();
+        }
+        catch
+        {
+            sentRequests = new();
+            sentRequestIds.Clear();
+            Snackbar.Add("Không thể tải lời mời đã gửi.", Severity.Error);
+        }
+        finally
+        {
+            loadingSent = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AcceptRequest(int id)
+    {
+        var (ok, error) = await FriendService.AcceptFriendRequestAsync(id);
+
+        if (ok)
+        {
+            Snackbar.Add("Đã chấp nhận kết bạn", Severity.Success);
+            await LoadPendingRequests();
+            await LoadFriends();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Lỗi", Severity.Error);
+        }
+    }
+
+    private async Task DeclineRequest(int id)
+    {
+        var (ok, error) = await FriendService.DeclineFriendRequestAsync(id);
+
+        if (ok)
+        {
+            Snackbar.Add("Đã từ chối", Severity.Info);
+            await LoadPendingRequests();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Lỗi", Severity.Error);
+        }
+    }
+
+    private async Task CancelRequest(int id)
+    {
+        var (ok, error) = await FriendService.CancelFriendRequestAsync(id);
+
+        if (ok)
+        {
+            Snackbar.Add("Đã hủy lời mời", Severity.Info);
+            await LoadSentRequests();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Lỗi", Severity.Error);
+        }
+    }
+
+    private async Task RemoveFriend(int friendId)
+    {
+        var (ok, error) = await FriendService.RemoveFriendAsync(friendId);
+
+        if (ok)
+        {
+            Snackbar.Add("Đã xóa bạn", Severity.Success);
+            await LoadFriends();
+        }
+        else
+        {
+            Snackbar.Add(error ?? "Lỗi", Severity.Error);
+        }
+    }
+
+    private string? BuildAvatarUrl(string? avatarUrl)
+    {
+        if (string.IsNullOrWhiteSpace(avatarUrl))
+            return null;
+
+        var value = avatarUrl.Trim();
+
+        if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            var separator = value.Contains('?') ? "&" : "?";
+            return $"{value}{separator}v={_avatarVersion}";
+        }
+
+        var normalized = value.StartsWith("/")
+            ? value
+            : $"/{value}";
+
+        return $"{BackendBaseUrl}{normalized}?v={_avatarVersion}";
+    }
+
+    private static string GetAvatarInitial(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "?";
+
+        return name.Trim()[0].ToString().ToUpperInvariant();
+    }
+}

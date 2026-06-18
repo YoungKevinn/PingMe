@@ -1,0 +1,120 @@
+﻿@page "/group/{groupId:int}"
+@using PingMe.Frontend.Models
+@inject GroupService GroupService
+@inject UserService UserService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<MudContainer>
+    @if (group == null)
+    {
+        <MudProgressCircular Indeterminate />
+    }
+    else
+    {
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h5">@group.Name</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText>Mô tả: @group.Description</MudText>
+                <MudText>Số thành viên: @group.Members.Count</MudText>
+                @if (isAdmin)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddMember">Thêm thành viên</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="DeleteGroup">Giải tán nhóm</MudButton>
+                }
+                <MudTable Items="@group.Members" Hover="true" Class="mt-4">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.h6">Danh sách thành viên</MudText>
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh>Tên</MudTh>
+                        <MudTh>Vai trò</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.DisplayName</MudTd>
+                        <MudTd>@context.Role</MudTd>
+                        <MudTd>
+                            @if (isAdmin && context.UserId != currentUserId)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="() => KickMember(context.UserId)" />
+                                <MudSelect T="string" Value="@context.Role" OnChanged="(string v) => UpdateRole(context.UserId, v)">
+                                    <MudSelectItem Value="Member">Member</MudSelectItem>
+                                    <MudSelectItem Value="CoAdmin">CoAdmin</MudSelectItem>
+                                    <MudSelectItem Value="Admin">Admin</MudSelectItem>
+                                </MudSelect>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+    private GroupResponse? group;
+    private int currentUserId;
+    private bool isAdmin => group != null && group.Members.Any(m => m.UserId == currentUserId && m.Role == "Admin");
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = (await AuthService.GetCurrentUserAsync())?.Id ?? 0;
+        await LoadGroup();
+    }
+
+    private async Task LoadGroup()
+    {
+        group = await GroupService.GetGroupAsync(GroupId);
+        StateHasChanged();
+    }
+
+    private async Task AddMember()
+    {
+        var username = await MudDialogService.ShowPromptAsync("Thêm thành viên", "Nhập tên đăng nhập:");
+        if (!string.IsNullOrEmpty(username))
+        {
+            var user = await UserService.GetProfileByUsernameAsync(username);
+            if (user != null)
+            {
+                var success = await GroupService.AddMemberAsync(GroupId, user.Id);
+                if (success)
+                {
+                    Snackbar.Add("Đã thêm thành viên", Severity.Success);
+                    await LoadGroup();
+                }
+                else Snackbar.Add("Không thể thêm", Severity.Error);
+            }
+            else Snackbar.Add("Không tìm thấy user", Severity.Error);
+        }
+    }
+
+    private async Task KickMember(int userId)
+    {
+        if (await MudDialogService.ShowMessageBox("Xóa thành viên", "Xóa?", yesText:"Xóa") == true)
+        {
+            await GroupService.KickMemberAsync(GroupId, userId);
+            await LoadGroup();
+        }
+    }
+
+    private async Task UpdateRole(int userId, string role)
+    {
+        await GroupService.UpdateMemberRoleAsync(GroupId, userId, role);
+        await LoadGroup();
+    }
+
+    private async Task DeleteGroup()
+    {
+        if (await MudDialogService.ShowMessageBox("Giải tán nhóm", "Chắc chắn?", yesText:"Xóa") == true)
+        {
+            await GroupService.DeleteGroupAsync(GroupId);
+            Nav.NavigateTo("/chat");
+        }
+    }
+}

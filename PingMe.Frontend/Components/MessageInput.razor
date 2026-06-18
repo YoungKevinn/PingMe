@@ -761,8 +761,8 @@ private int CurrentUserId;
         new("🧬", "/ioc md5", "IOC MD5", "Tạo IOC card cho MD5 hash", "/ioc md5 "),
         new("🧬", "/ioc sha256", "IOC SHA256", "Tạo IOC card cho SHA256 hash", "/ioc sha256 "),
         new("🔗", "/ioc url", "IOC URL", "Tạo IOC card cho URL nghi vấn", "/ioc url ", "/ioc url https://example.com"),
-        new("🎯", "/vuln", "Finding", "Tạo finding pentest từ group chat", "/vuln ", "/vuln <severity> <title> | endpoint=<method path>"),
-        new("✅", "/task", "Task", "Tạo task group từ chat", "/task ", "/task <title> @user due:<date> priority:<level>"),
+        new("🎯", "/vuln", "Finding", "Tạo finding pentest từ group chat / Create a pentest finding from group chat", "/vuln high SQL Injection on login page | endpoint=POST /api/auth/login | payload=' OR '1'='1'--", "/vuln high SQL Injection on login page | endpoint=POST /api/auth/login | payload=' OR '1'='1'--"),
+        new("✅", "/task", "Task", "Tạo task group từ chat", "/task Review auth flow @username due:tomorrow priority:high", "/task Review auth flow @username due:tomorrow priority:high"),
         new("⏰", "/reminder", "Reminder", "Tạo nhắc việc trong chat", "/reminder ", "/reminder 10p "),
         new("💻", "/snippet", "Snippet", "Mở cửa sổ gửi code snippet", "/snippet "),
         new("📌", "/pin", "Pin", "Ghim tin nhắn bằng action hover", "/pin ")

@@ -1,0 +1,129 @@
+@page "/register"
+@using PingMe.Frontend.Models
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+
+<div class="pm-auth-wrapper">
+    <div class="pm-auth-card">
+        <div class="pm-auth-logo">
+            <div class="pm-auth-logo-icon">
+                <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Style="color:white;font-size:30px;" />
+            </div>
+            <div>
+                <p class="pm-auth-title">Tạo tài khoản</p>
+                <p class="pm-auth-subtitle">Tham gia PingMe hôm nay</p>
+            </div>
+        </div>
+
+        <MudForm @ref="form">
+            <MudTextField @bind-Value="model.Email"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Email"
+                          Required="true"
+                          RequiredError="Vui lòng nhập email"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="model.Username"
+                          Label="Tên người dùng"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.AlternateEmail"
+                          Required="true"
+                          RequiredError="Vui lòng nhập tên người dùng"
+                          HelperText="Dùng để tìm kiếm và nhắn tin"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="model.DisplayName"
+                          Label="Tên hiển thị"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Person"
+                          Required="true"
+                          RequiredError="Vui lòng nhập tên"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="model.Password"
+                          Label="Mật khẩu"
+                          Variant="Variant.Outlined"
+                          InputType="@(showPw ? InputType.Text : InputType.Password)"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(showPw ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                          OnAdornmentClick="() => showPw = !showPw"
+                          Required="true"
+                          RequiredError="Vui lòng nhập mật khẩu"
+                          HelperText="Tối thiểu 6 ký tự"
+                          Class="mb-4" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="RegisterAsync"
+                       Disabled="@_loading"
+                       Style="height:48px;font-size:1rem;font-weight:600;">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" Class="mr-2" />
+                    <span>Đang tạo tài khoản...</span>
+                }
+                else
+                {
+                    <span>Đăng ký</span>
+                }
+            </MudButton>
+        </MudForm>
+
+        <div class="pm-auth-divider"><span>đã có tài khoản?</span></div>
+
+        <div style="text-align:center;">
+            <MudLink Href="/login" Style="font-weight:600;">Đăng nhập</MudLink>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterRequest model = new();
+    private MudForm? form;
+    private bool showPw;
+    private bool _loading;
+
+    private async Task RegisterAsync()
+    {
+        if (form == null)
+            return;
+
+        await form.Validate();
+
+        if (!form.IsValid)
+            return;
+
+        model.Email = model.Email.Trim().ToLowerInvariant();
+        model.Username = model.Username.Trim();
+        model.DisplayName = model.DisplayName.Trim();
+
+        _loading = true;
+
+        try
+        {
+            var result = await AuthService.RegisterWithMessageAsync(model);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Đăng ký thành công! Vui lòng đăng nhập.", Severity.Success);
+                Nav.NavigateTo("/login");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Đăng ký thất bại.", Severity.Error);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

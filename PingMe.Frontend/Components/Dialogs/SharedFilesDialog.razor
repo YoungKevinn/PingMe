@@ -1,0 +1,233 @@
+@using PingMe.Frontend.Models
+@inject MessageService MessageService
+
+<div class="pm-shared-files-dialog">
+    <div class="pm-shared-title">
+        <div>
+            <MudText Typo="Typo.h6">Tệp đã chia sẻ</MudText>
+            @if (!string.IsNullOrWhiteSpace(ConversationTitle))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@ConversationTitle</MudText>
+            }
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Small"
+                       ButtonType="ButtonType.Button"
+                       OnClick="CloseAsync"
+                       AriaLabel="Đóng" />
+    </div>
+
+    <div class="pm-shared-content">
+        @if (_loading)
+        {
+            <div class="pm-shared-loading">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            </div>
+        }
+        else if (!_files.Any())
+        {
+            <div class="pm-shared-empty">
+                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" />
+                <span>Chưa có tệp nào được chia sẻ.</span>
+            </div>
+        }
+        else
+        {
+            <div class="pm-shared-list">
+                @foreach (var item in _files)
+                {
+                    var file = item;
+                    var url = BuildFileUrl(file.FileUrl);
+
+                    <div class="pm-shared-row">
+                        <div class="@($"pm-shared-icon {(file.IsImage ? "image" : "file")}")">
+                            <MudIcon Icon="@(file.IsImage ? Icons.Material.Filled.Image : Icons.Material.Filled.InsertDriveFile)" />
+                        </div>
+
+                        <div class="pm-shared-info">
+                            <div class="pm-shared-name" title="@file.FileName">@file.FileName</div>
+                            <div class="pm-shared-meta">
+                                @file.SenderDisplayName · @file.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @file.DisplaySize
+                            </div>
+                            <div class="pm-shared-type">@file.MimeType</div>
+                        </div>
+
+                        <a class="pm-shared-open"
+                           href="@url"
+                           target="_blank"
+                           rel="noopener noreferrer">
+                            Mở
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="pm-shared-actions">
+        <MudButton Variant="Variant.Text" ButtonType="ButtonType.Button" OnClick="CloseAsync">Đóng</MudButton>
+    </div>
+</div>
+
+<style>
+    .pm-shared-files-dialog {
+        display: flex;
+        flex-direction: column;
+        max-height: min(90vh, 720px);
+    }
+
+    .pm-shared-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 16px 20px 10px;
+    }
+
+    .pm-shared-content {
+        padding: 8px 20px 16px;
+        overflow: auto;
+    }
+
+    .pm-shared-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: 8px 20px 16px;
+    }
+
+    .pm-shared-loading {
+        min-height: 180px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pm-shared-empty {
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: var(--mud-palette-text-secondary);
+        text-align: center;
+    }
+
+        .pm-shared-empty .mud-icon-root {
+            font-size: 42px;
+            opacity: .55;
+        }
+
+    .pm-shared-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: min(64vh, 560px);
+        overflow: auto;
+        padding: 2px 2px 8px;
+    }
+
+    .pm-shared-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 10px;
+        background: var(--mud-palette-surface);
+    }
+
+    .pm-shared-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(100, 116, 139, .14);
+        color: #475569;
+    }
+
+        .pm-shared-icon.image {
+            background: rgba(16, 185, 129, .14);
+            color: #047857;
+        }
+
+    .pm-shared-info {
+        min-width: 0;
+    }
+
+    .pm-shared-name {
+        color: var(--mud-palette-text-primary);
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pm-shared-meta,
+    .pm-shared-type {
+        color: var(--mud-palette-text-secondary);
+        font-size: .76rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pm-shared-open {
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 999px;
+        padding: 7px 12px;
+        color: var(--mud-palette-primary);
+        font-weight: 800;
+        font-size: .82rem;
+        text-decoration: none;
+    }
+
+        .pm-shared-open:hover {
+            background: rgba(59, 130, 246, .12);
+        }
+</style>
+
+@code {
+    [Parameter] public int? PeerId { get; set; }
+    [Parameter] public int? GroupId { get; set; }
+    [Parameter] public string? ConversationTitle { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private const string BackendBaseUrl = "http://localhost:5000";
+
+    private List<ConversationAttachmentResponse> _files = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _files = await MessageService.GetConversationAttachmentsAsync(GroupId, PeerId, "all", 100)
+                ?? new List<ConversationAttachmentResponse>();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private static string BuildFileUrl(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl))
+            return "#";
+
+        if (fileUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            fileUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return fileUrl;
+
+        var normalized = fileUrl.StartsWith("/") ? fileUrl : $"/{fileUrl}";
+        return $"{BackendBaseUrl}{normalized}";
+    }
+}

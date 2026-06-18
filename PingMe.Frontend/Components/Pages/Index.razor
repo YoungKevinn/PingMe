@@ -1,0 +1,21 @@
+@page "/"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo("/chat", replace: true);
+        }
+        else
+        {
+            Nav.NavigateTo("/login", replace: true);
+        }
+    }
+}

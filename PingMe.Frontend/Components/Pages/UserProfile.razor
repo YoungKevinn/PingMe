@@ -1,0 +1,184 @@
+@page "/user/{UserId:int}"
+@attribute [Authorize]
+@using System.Security.Claims
+@using PingMe.Frontend.Models
+@inject UserService UserService
+@inject FriendService FriendService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<MudContainer Class="mt-4">
+    @if (loading)
+    {
+        <MudProgressCircular Indeterminate />
+    }
+    else if (user == null)
+    {
+        <MudAlert Severity="Severity.Error">Không tìm thấy người dùng.</MudAlert>
+    }
+    else
+    {
+        <MudCard>
+            <MudCardContent>
+                <div style="display:flex; gap:20px; align-items:center;">
+                    <MudAvatar Size="Size.Large">
+                        @if (!string.IsNullOrEmpty(user.AvatarUrl))
+                        {
+                            <MudImage Src="@user.AvatarUrl" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Style="font-size:40px;" />
+                        }
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h5">@user.DisplayName</MudText>
+                        <MudText Typo="Typo.body2">@user.Username</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@user.Bio</MudText>
+                    </div>
+                </div>
+            </MudCardContent>
+            <MudCardActions>
+                @if (user.Id != currentUserId)
+                {
+                    if (isFriend)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Success" Disabled="true">✓ Bạn bè</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="RemoveFriend">Hủy kết bạn</MudButton>
+                    }
+                    else if (requestSent)
+                    {
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="true">⌛ Đã gửi lời mời</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="CancelRequest">Hủy yêu cầu</MudButton>
+                    }
+                    else if (requestReceived)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AcceptRequest">✅ Chấp nhận</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeclineRequest">❌ Từ chối</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendFriendRequest">➕ Kết bạn</MudButton>
+                    }
+                }
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick='@(() => Nav.NavigateTo($"/chat/{user.Id}"))'>💬 Nhắn tin</MudButton>            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    private UserProfileResponse? user;
+    private int currentUserId;
+    private bool loading = true;
+    private bool isFriend = false;
+    private bool requestSent = false;
+    private bool requestReceived = false;
+    private int? pendingRequestId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        currentUserId = int.TryParse(idClaim, out var id) ? id : 0;
+        await LoadProfile();
+        await CheckFriendshipStatus();
+        loading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadProfile()
+    {
+        user = await UserService.GetProfileAsync(UserId);
+    }
+
+    private async Task CheckFriendshipStatus()
+    {
+        if (user == null) return;
+        isFriend = await FriendService.AreFriendsAsync(UserId);
+        if (isFriend) return;
+
+        var sent = await FriendService.GetSentRequestsAsync();
+        requestSent = sent.Any(r => r.ToUserId == UserId);
+        var received = await FriendService.GetPendingRequestsAsync();
+        requestReceived = received.Any(r => r.FromUserId == UserId);
+        if (requestReceived)
+        {
+            pendingRequestId = received.First(r => r.FromUserId == UserId).Id;
+        }
+    }
+
+    private async Task SendFriendRequest()
+    {
+        var (ok, error) = await FriendService.SendFriendRequestAsync(UserId);
+        if (ok)
+        {
+            Snackbar.Add("Đã gửi lời mời kết bạn", Severity.Success);
+            requestSent = true;
+            StateHasChanged();
+        }
+        else Snackbar.Add(error ?? "Không thể gửi lời mời", Severity.Error);
+    }
+
+    private async Task CancelRequest()
+    {
+        var sent = await FriendService.GetSentRequestsAsync();
+        var req = sent.FirstOrDefault(r => r.ToUserId == UserId);
+        if (req == null)
+        {
+            Snackbar.Add("Không tìm thấy lời mời", Severity.Warning);
+            return;
+        }
+
+        var (ok, error) = await FriendService.CancelFriendRequestAsync(req.Id);
+        if (ok)
+        {
+            Snackbar.Add("Đã hủy lời mời", Severity.Info);
+            requestSent = false;
+            StateHasChanged();
+        }
+        else Snackbar.Add(error ?? "Lỗi", Severity.Error);
+    }
+
+    private async Task AcceptRequest()
+    {
+        if (!pendingRequestId.HasValue) return;
+
+        var (ok, error) = await FriendService.AcceptFriendRequestAsync(pendingRequestId.Value);
+        if (ok)
+        {
+            Snackbar.Add("Đã chấp nhận kết bạn", Severity.Success);
+            isFriend = true;
+            requestReceived = false;
+            StateHasChanged();
+        }
+        else Snackbar.Add(error ?? "Lỗi", Severity.Error);
+    }
+
+    private async Task DeclineRequest()
+    {
+        if (!pendingRequestId.HasValue) return;
+
+        var (ok, error) = await FriendService.DeclineFriendRequestAsync(pendingRequestId.Value);
+        if (ok)
+        {
+            Snackbar.Add("Đã từ chối", Severity.Info);
+            requestReceived = false;
+            StateHasChanged();
+        }
+        else Snackbar.Add(error ?? "Lỗi", Severity.Error);
+    }
+
+    private async Task RemoveFriend()
+    {
+        var (ok, error) = await FriendService.RemoveFriendAsync(UserId);
+        if (ok)
+        {
+            Snackbar.Add("Đã xóa bạn", Severity.Info);
+            isFriend = false;
+            StateHasChanged();
+        }
+        else Snackbar.Add(error ?? "Lỗi", Severity.Error);
+    }
+}

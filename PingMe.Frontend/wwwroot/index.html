@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1D4ED8" />
+    <title>PingMe</title>
+    <base href="/" />
+
+    <!-- BẪY LỖI GLOBAL MẠNH NHẤT -->
+    <script>
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            var el = document.createElement('div');
+            el.style = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;z-index:99999;padding:20px;font-family:sans-serif;font-size:16px;overflow:auto;max-height:100vh;';
+            el.innerHTML = '<h2>Global Error Caught!</h2>' + 
+                           '<p><b>Message:</b> ' + msg + '</p>' + 
+                           '<p><b>URL:</b> ' + url + ':' + lineNo + ':' + columnNo + '</p>' + 
+                           '<pre>' + (error && error.stack ? error.stack : '') + '</pre>';
+            document.body.appendChild(el);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            var el = document.createElement('div');
+            el.style = 'position:fixed;top:0;left:0;width:100%;background:darkred;color:white;z-index:99999;padding:20px;font-family:sans-serif;font-size:16px;overflow:auto;max-height:100vh;';
+            el.innerHTML = '<h2>Unhandled Promise Rejection!</h2>' + 
+                           '<pre>' + (event.reason && event.reason.stack ? event.reason.stack : event.reason) + '</pre>';
+            document.body.appendChild(el);
+        });
+    </script>
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=5" />
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=5" />
+
+    <!-- highlight.js theme -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+
+    <!-- Fonts: Inter for UI, Fira Code for code blocks -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700;800&display=swap"
+          rel="stylesheet" />
+
+    <!-- MudBlazor -->
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+
+    <!-- Custom styles -->
+    <link href="app.css?v=20260519-badge-scroll-1" rel="stylesheet" />
+</head>
+
+<body>
+    <div id="app">
+        <div class="pm-splash">
+            <div class="pm-splash-logo">
+                <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="56" height="56" rx="16" fill="#1D4ED8" />
+                    <path d="M14 20C14 17.8 15.8 16 18 16H38C40.2 16 42 17.8 42 20V32C42 34.2 40.2 36 38 36H30L22 42V36H18C15.8 36 14 34.2 14 32V20Z" fill="white" />
+                    <circle cx="22" cy="26" r="2" fill="#1D4ED8" />
+                    <circle cx="28" cy="26" r="2" fill="#1D4ED8" />
+                    <circle cx="34" cy="26" r="2" fill="#1D4ED8" />
+                </svg>
+            </div>
+            <p class="pm-splash-text">PingMe</p>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        Đã xảy ra lỗi. Vui lòng <a href="" class="reload">tải lại</a>.
+    </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="js/pingmeCache.js?v=20260519-1"></script>
+    <script src="js/chatScroll.js?v=20260519-4"></script>
+    <script type="module">
+        import * as audioRecorder from './audio-recorder.js';
+        window.audioRecorder = audioRecorder;
+    </script>
+    <script>
+        window.pingMeReminderAlarm = {
+            play: function () {
+                try {
+                    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+
+                    if (!AudioContextCtor) {
+                        return;
+                    }
+
+                    const ctx = new AudioContextCtor();
+                    const oscillator = ctx.createOscillator();
+                    const gain = ctx.createGain();
+
+                    oscillator.type = "sine";
+                    oscillator.frequency.value = 880;
+                    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+                    oscillator.connect(gain);
+                    gain.connect(ctx.destination);
+                    oscillator.start();
+                    oscillator.stop(ctx.currentTime + 0.5);
+                    oscillator.onended = () => ctx.close?.();
+                } catch {
+                }
+            },
+            setTitleAlert: function (enabled) {
+                try {
+                    if (!window.__pingMeOriginalTitle) {
+                        window.__pingMeOriginalTitle = document.title || "PingMe";
+                    }
+
+                    if (enabled) {
+                        document.title = "⏰ Nhắc việc - " + window.__pingMeOriginalTitle.replace(/^⏰ Nhắc việc - /, "");
+                    } else {
+                        document.title = window.__pingMeOriginalTitle;
+                    }
+                } catch {
+                }
+            }
+        };
+    </script>
+
+    <!-- highlight.js core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <script>
+        window.pingmeNormalizeHighlightLanguage = (language) => {
+            const value = (language || "plaintext").toString().trim().toLowerCase();
+
+            switch (value) {
+                case "c#":
+                case "cs":
+                    return "csharp";
+
+                case "js":
+                    return "javascript";
+
+                case "ts":
+                    return "typescript";
+
+                case "py":
+                    return "python";
+
+                case "sh":
+                case "shell":
+                    return "bash";
+
+                case "ps":
+                case "ps1":
+                    return "powershell";
+
+                case "md":
+                    return "markdown";
+
+                case "yml":
+                    return "yaml";
+
+                case "html":
+                    return "xml";
+
+                case "plain":
+                case "text":
+                    return "plaintext";
+
+                default:
+                    return value || "plaintext";
+            }
+        };
+
+        window.pingmeHighlight = () => {
+            setTimeout(() => {
+                if (!window.hljs) {
+                    return;
+                }
+
+                document.querySelectorAll("pre code").forEach((el) => {
+                    if (el.dataset.highlighted === "yes") {
+                        return;
+                    }
+
+                    try {
+                        hljs.highlightElement(el);
+                    } catch {
+                        el.classList.add("language-plaintext");
+
+                        try {
+                            hljs.highlightElement(el);
+                        } catch {
+                            // Ignore highlight error.
+                        }
+                    }
+                });
+
+                document.querySelectorAll("pre").forEach((pre) => {
+                    if (!pre.querySelector("code")) {
+                        return;
+                    }
+
+                    if (pre.querySelector(".copy-code-btn")) {
+                        return;
+                    }
+
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.textContent = "Copy";
+                    btn.className = "copy-code-btn";
+
+                    btn.onclick = async () => {
+                        const code = pre.querySelector("code")?.innerText || "";
+
+                        try {
+                            await navigator.clipboard.writeText(code);
+                            btn.textContent = "Copied!";
+                        } catch {
+                            btn.textContent = "Error";
+                        }
+
+                        setTimeout(() => {
+                            btn.textContent = "Copy";
+                        }, 1400);
+                    };
+
+                    pre.style.position = "relative";
+                    pre.appendChild(btn);
+                });
+            }, 80);
+        };
+
+        window.pingmeSnippetFullscreen = {
+            close: function () {
+                const old = document.getElementById("pm-snippet-fullscreen-root");
+
+                if (old) {
+                    old.remove();
+                }
+
+                document.body.style.overflow = "";
+            },
+
+            open: function (title, language, content) {
+                this.close();
+
+                const root = document.createElement("div");
+                root.id = "pm-snippet-fullscreen-root";
+                root.style.position = "fixed";
+                root.style.inset = "0";
+                root.style.width = "100vw";
+                root.style.height = "100vh";
+                root.style.zIndex = "2147483647";
+                root.style.background = "#020617";
+                root.style.color = "#E5E7EB";
+                root.style.display = "flex";
+                root.style.flexDirection = "column";
+                root.style.overflow = "hidden";
+
+                const header = document.createElement("div");
+                header.style.height = "64px";
+                header.style.flexShrink = "0";
+                header.style.display = "flex";
+                header.style.alignItems = "center";
+                header.style.justifyContent = "space-between";
+                header.style.gap = "16px";
+                header.style.padding = "0 22px";
+                header.style.background = "#0F172A";
+                header.style.borderBottom = "1px solid rgba(148,163,184,.22)";
+                header.style.color = "white";
+                header.style.boxShadow = "0 8px 24px rgba(0,0,0,.35)";
+
+                const titleWrap = document.createElement("div");
+                titleWrap.style.minWidth = "0";
+
+                const titleEl = document.createElement("div");
+                titleEl.textContent = title || "Code snippet";
+                titleEl.style.fontSize = "16px";
+                titleEl.style.fontWeight = "800";
+                titleEl.style.whiteSpace = "nowrap";
+                titleEl.style.overflow = "hidden";
+                titleEl.style.textOverflow = "ellipsis";
+                titleEl.style.maxWidth = "68vw";
+
+                const langEl = document.createElement("div");
+                langEl.textContent = language || "plaintext";
+                langEl.style.fontSize = "12px";
+                langEl.style.color = "#94A3B8";
+                langEl.style.marginTop = "2px";
+
+                titleWrap.appendChild(titleEl);
+                titleWrap.appendChild(langEl);
+
+                const actions = document.createElement("div");
+                actions.style.display = "flex";
+                actions.style.alignItems = "center";
+                actions.style.gap = "10px";
+                actions.style.flexShrink = "0";
+
+                const copyBtn = document.createElement("button");
+                copyBtn.type = "button";
+                copyBtn.textContent = "Copy code";
+                copyBtn.style.height = "40px";
+                copyBtn.style.border = "0";
+                copyBtn.style.borderRadius = "12px";
+                copyBtn.style.padding = "0 16px";
+                copyBtn.style.background = "#2563EB";
+                copyBtn.style.color = "white";
+                copyBtn.style.fontWeight = "800";
+                copyBtn.style.cursor = "pointer";
+
+                copyBtn.onclick = async function () {
+                    try {
+                        await navigator.clipboard.writeText(content || "");
+                        copyBtn.textContent = "Đã copy";
+
+                        setTimeout(() => {
+                            copyBtn.textContent = "Copy code";
+                        }, 1200);
+                    } catch {
+                        copyBtn.textContent = "Copy lỗi";
+
+                        setTimeout(() => {
+                            copyBtn.textContent = "Copy code";
+                        }, 1200);
+                    }
+                };
+
+                const closeBtn = document.createElement("button");
+                closeBtn.type = "button";
+                closeBtn.textContent = "×";
+                closeBtn.title = "Đóng";
+                closeBtn.style.width = "40px";
+                closeBtn.style.height = "40px";
+                closeBtn.style.border = "1px solid rgba(148,163,184,.25)";
+                closeBtn.style.borderRadius = "999px";
+                closeBtn.style.background = "rgba(148,163,184,.12)";
+                closeBtn.style.color = "white";
+                closeBtn.style.fontSize = "26px";
+                closeBtn.style.lineHeight = "1";
+                closeBtn.style.cursor = "pointer";
+
+                closeBtn.onclick = () => {
+                    window.pingmeSnippetFullscreen.close();
+                };
+
+                actions.appendChild(copyBtn);
+                actions.appendChild(closeBtn);
+
+                header.appendChild(titleWrap);
+                header.appendChild(actions);
+
+                const body = document.createElement("div");
+                body.style.flex = "1";
+                body.style.minHeight = "0";
+                body.style.overflow = "hidden";
+                body.style.padding = "18px";
+                body.style.background = "#020617";
+
+                const pre = document.createElement("pre");
+                pre.style.width = "100%";
+                pre.style.height = "100%";
+                pre.style.margin = "0";
+                pre.style.padding = "22px";
+                pre.style.overflow = "auto";
+                pre.style.borderRadius = "16px";
+                pre.style.background = "#0B1120";
+                pre.style.color = "#E5E7EB";
+                pre.style.border = "1px solid rgba(148,163,184,.18)";
+                pre.style.fontFamily = "'Fira Code', Consolas, monospace";
+                pre.style.fontSize = "14px";
+                pre.style.lineHeight = "1.65";
+                pre.style.whiteSpace = "pre";
+                pre.style.wordBreak = "normal";
+                pre.style.boxSizing = "border-box";
+
+                const code = document.createElement("code");
+
+                const normalizedLanguage = window.pingmeNormalizeHighlightLanguage
+                    ? window.pingmeNormalizeHighlightLanguage(language)
+                    : (language || "plaintext");
+
+                code.className = `language-${normalizedLanguage}`;
+                code.textContent = content || "";
+                code.style.display = "block";
+                code.style.minWidth = "max-content";
+                code.style.color = "inherit";
+                code.style.background = "transparent";
+                code.style.fontFamily = "inherit";
+                code.style.fontSize = "inherit";
+                code.style.lineHeight = "inherit";
+                code.style.whiteSpace = "pre";
+
+                pre.appendChild(code);
+                body.appendChild(pre);
+
+                root.appendChild(header);
+                root.appendChild(body);
+
+                document.body.appendChild(root);
+                document.body.style.overflow = "hidden";
+
+                const escHandler = function (e) {
+                    if (e.key === "Escape") {
+                        window.pingmeSnippetFullscreen.close();
+                        document.removeEventListener("keydown", escHandler);
+                    }
+                };
+
+                document.addEventListener("keydown", escHandler);
+
+                if (window.hljs) {
+                    try {
+                        hljs.highlightElement(code);
+                    } catch {
+                        // Ignore highlight error.
+                    }
+                }
+            }
+        };
+
+        window.pingmeShell = {
+            applySidebarWidth: function (width) {
+                const sidebar = document.getElementById("pm-left-sidebar");
+                const main = document.getElementById("pm-main-content");
+
+                if (!sidebar || !main) {
+                    return;
+                }
+
+                const finalWidth = Math.max(220, Math.min(420, Number(width) || 264));
+
+                sidebar.style.width = finalWidth + "px";
+                main.style.left = finalWidth + "px";
+
+                localStorage.setItem("pm_sidebar_width", finalWidth.toString());
+            },
+
+            initSidebarWidth: function () {
+                const saved = localStorage.getItem("pm_sidebar_width");
+                const width = saved ? Number(saved) : 264;
+
+                this.applySidebarWidth(width);
+            },
+
+            startSidebarResize: function () {
+                const sidebar = document.getElementById("pm-left-sidebar");
+                const main = document.getElementById("pm-main-content");
+
+                if (!sidebar || !main) {
+                    return;
+                }
+
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+
+                const onMove = (e) => {
+                    const width = Math.max(220, Math.min(420, e.clientX));
+
+                    sidebar.style.width = width + "px";
+                    main.style.left = width + "px";
+
+                    localStorage.setItem("pm_sidebar_width", width.toString());
+                };
+
+                const onUp = () => {
+                    document.body.style.cursor = "";
+                    document.body.style.userSelect = "";
+
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                };
+
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+            }
+        };
+    </script>
+</body>
+</html>

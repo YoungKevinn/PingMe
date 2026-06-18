@@ -1,0 +1,243 @@
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Helpers
+@inject FriendService FriendService
+@inject GroupService GroupService
+@inject ISnackbar Snackbar
+
+<div class="pm-add-member-dialog">
+    <div class="pm-dialog-title">
+        <div>
+            <MudText Typo="Typo.h6">Thêm thành viên</MudText>
+            @if (!string.IsNullOrWhiteSpace(GroupName))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@GroupName</MudText>
+            }
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Small"
+                       ButtonType="ButtonType.Button"
+                       OnClick="CloseAsync"
+                       AriaLabel="Đóng" />
+    </div>
+
+    <div class="pm-dialog-body">
+        @if (_loading)
+        {
+            <div class="pm-dialog-loading">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            </div>
+        }
+        else if (!_candidates.Any())
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">
+                Không có bạn bè phù hợp để thêm vào nhóm.
+            </MudAlert>
+        }
+        else
+        {
+            <MudTextField @bind-Value="_filter"
+                          Placeholder="Tìm bạn bè..."
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" />
+
+            <div class="pm-member-picker">
+                @foreach (var friend in FilteredCandidates)
+                {
+                    var item = friend;
+                    var avatarUrl = UrlHelper.BuildBackendUrl(item.AvatarUrl);
+
+                    <button type="button"
+                            class="@($"pm-member-picker-row {(_selectedUserId == item.UserId ? "selected" : "")}")"
+                            @onclick="() => _selectedUserId = item.UserId">
+                        <MudAvatar Size="Size.Small">
+                            <span>@GetInitial(item.DisplayName)</span>
+                            @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                            {
+                                <img src="@avatarUrl"
+                                     alt="@item.DisplayName"
+                                     class="pm-avatar-image"
+                                     loading="lazy"
+                                     decoding="async"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.style.display='none';this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                            }
+                        </MudAvatar>
+                        <span>@item.DisplayName</span>
+                        @if (_selectedUserId == item.UserId)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" />
+                        }
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="pm-dialog-actions">
+        <MudButton Variant="Variant.Text" ButtonType="ButtonType.Button" OnClick="CloseAsync">Đóng</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   ButtonType="ButtonType.Button"
+                   Disabled="@(!_selectedUserId.HasValue || _saving)"
+                   OnClick="AddAsync">
+            Thêm
+        </MudButton>
+    </div>
+</div>
+
+<style>
+    .pm-add-member-dialog {
+        display: flex;
+        flex-direction: column;
+        max-height: min(90vh, 720px);
+    }
+
+    .pm-dialog-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 16px 20px 10px;
+    }
+
+    .pm-dialog-body {
+        padding: 8px 20px 16px;
+        overflow: auto;
+    }
+
+    .pm-dialog-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 20px 16px;
+    }
+
+    .pm-dialog-loading {
+        min-height: 160px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pm-member-picker {
+        max-height: 320px;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 12px;
+    }
+
+    .pm-member-picker-row {
+        width: 100%;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 10px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        cursor: pointer;
+        text-align: left;
+    }
+
+        .pm-member-picker-row:hover,
+        .pm-member-picker-row.selected {
+            border-color: var(--mud-palette-primary);
+            background: rgba(59, 130, 246, .10);
+        }
+
+        .pm-member-picker-row > span {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 700;
+        }
+
+</style>
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+    [Parameter] public string? GroupName { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<bool> OnSaved { get; set; }
+
+    private readonly List<FriendResponseDto> _candidates = new();
+    private string _filter = string.Empty;
+    private int? _selectedUserId;
+    private bool _loading = true;
+    private bool _saving;
+
+    private IEnumerable<FriendResponseDto> FilteredCandidates =>
+        string.IsNullOrWhiteSpace(_filter)
+            ? _candidates.OrderBy(x => x.DisplayName)
+            : _candidates
+                .Where(x => x.DisplayName.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.DisplayName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var friends = await FriendService.GetFriendsAsync();
+            var members = await GroupService.GetGroupMembersAsync(GroupId);
+            var memberIds = members.Select(x => x.UserId).ToHashSet();
+
+            _candidates.Clear();
+            _candidates.AddRange(friends.Where(x => !memberIds.Contains(x.UserId)));
+        }
+        catch
+        {
+            Snackbar.Add("Không tải được danh sách bạn bè.", Severity.Warning);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (!_selectedUserId.HasValue)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var ok = await GroupService.AddMemberAsync(GroupId, _selectedUserId.Value);
+
+            if (!ok)
+            {
+                Snackbar.Add(GroupService.LastError ?? "Không thể thêm thành viên. Người này có thể chưa đủ điều kiện hoặc bạn thiếu quyền.", Severity.Warning);
+                return;
+            }
+
+            Snackbar.Add("Đã thêm thành viên vào nhóm.", Severity.Success);
+            await OnSaved.InvokeAsync(true);
+            await OnClose.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Không thể thêm thành viên.", Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private static char GetInitial(string? displayName) =>
+        string.IsNullOrWhiteSpace(displayName) ? '?' : displayName.Trim()[0];
+}

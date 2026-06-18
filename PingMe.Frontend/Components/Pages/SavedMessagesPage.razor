@@ -1,0 +1,395 @@
+@page "/saved"
+@page "/bookmarks"
+@attribute [Authorize]
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Helpers
+@inject SavedMessageService SavedMessageService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject LocalizationService Loc
+@implements IDisposable
+
+<div class="pm-saved-page">
+    <div class="pm-saved-header">
+        <div>
+            <h1>@Loc.T("saved.title")</h1>
+            <p>@Loc.T("saved.subtitle")</p>
+        </div>
+
+        <div class="pm-saved-filter" role="tablist" aria-label="@Loc.T("saved.title")">
+            <button type="button" class="@FilterClass("all")" @onclick="@(() => OnFilterChanged("all"))">@Loc.T("saved.all")</button>
+            <button type="button" class="@FilterClass("dm")" @onclick="@(() => OnFilterChanged("dm"))">@Loc.T("saved.dm")</button>
+            <button type="button" class="@FilterClass("group")" @onclick="@(() => OnFilterChanged("group"))">@Loc.T("saved.group")</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="pm-saved-loading">
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+        </div>
+    }
+    else if (!_items.Any())
+    {
+        <div class="pm-saved-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.BookmarkBorder" Style="font-size:56px;opacity:.28;" />
+            <p>@Loc.T("saved.empty")</p>
+        </div>
+    }
+    else
+    {
+        <div class="pm-saved-list">
+            @foreach (var item in _items)
+            {
+                <article class="pm-saved-card">
+                    <div class="pm-saved-avatar">
+                        @if (!string.IsNullOrWhiteSpace(UrlHelper.BuildBackendUrl(item.SenderAvatarUrl)))
+                        {
+                            <img src="@UrlHelper.BuildBackendUrl(item.SenderAvatarUrl)"
+                                 alt="@item.SenderName"
+                                 loading="lazy"
+                                 decoding="async" />
+                        }
+                        else
+                        {
+                            <span>@(string.IsNullOrWhiteSpace(item.SenderName) ? "?" : item.SenderName[0])</span>
+                        }
+                    </div>
+
+                    <div class="pm-saved-body">
+                        <div class="pm-saved-meta-row">
+                            <span class="pm-saved-sender">@item.SenderName</span>
+                            <span class="pm-saved-context">@GetConversationContext(item)</span>
+                        </div>
+
+                        <div class="pm-saved-content">@GetPreview(item)</div>
+
+                        @if (!string.IsNullOrWhiteSpace(item.FileName))
+                        {
+                            <a class="pm-saved-file"
+                               href="@UrlHelper.BuildBackendUrl(item.FileUrl)"
+                               target="_blank"
+                               rel="noopener">
+                                <MudIcon Icon="@Icons.Material.Filled.AttachFile" Style="font-size:16px;" />
+                                <span>@item.FileName</span>
+                            </a>
+                        }
+
+                        <div class="pm-saved-time-row">
+                            <span>@Loc.T("saved.messageTime"): @item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            <span>@Loc.T("saved.savedAt"): @item.SavedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+                    </div>
+
+                    <div class="pm-saved-actions">
+                        <MudTooltip Text="@Loc.T("saved.openOriginal")">
+                            <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="() => JumpToOriginal(item)" />
+                        </MudTooltip>
+
+                        <MudTooltip Text="@Loc.T("saved.unsave")">
+                            <MudIconButton Icon="@Icons.Material.Filled.BookmarkRemove"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           Disabled="@_busyMessageIds.Contains(item.MessageId)"
+                                           OnClick="() => UnsaveAsync(item)" />
+                        </MudTooltip>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .pm-saved-page {
+        min-height: calc(100vh - 64px);
+        padding: 24px;
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-saved-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        max-width: 960px;
+        margin: 0 auto 18px;
+    }
+
+        .pm-saved-header h1 {
+            margin: 0 0 4px;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--mud-palette-text-primary);
+        }
+
+        .pm-saved-header p {
+            margin: 0;
+            color: var(--mud-palette-text-secondary);
+            font-size: .9rem;
+        }
+
+    .pm-saved-loading,
+    .pm-saved-empty {
+        min-height: 320px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        color: var(--mud-palette-text-secondary);
+        font-weight: 700;
+    }
+
+    .pm-saved-filter {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px;
+        border-radius: 8px;
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+    }
+
+        .pm-saved-filter button {
+            border: 0;
+            border-radius: 6px;
+            padding: 7px 12px;
+            background: transparent;
+            color: var(--mud-palette-text-secondary);
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+            .pm-saved-filter button.active {
+                background: var(--mud-palette-primary);
+                color: white;
+            }
+
+    .pm-saved-list {
+        max-width: 960px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .pm-saved-card {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 14px;
+        border-radius: 8px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: var(--pm-shadow-sm);
+    }
+
+    .pm-saved-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        overflow: hidden;
+        background: rgba(59, 130, 246, .14);
+        color: var(--mud-palette-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+        .pm-saved-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .pm-saved-body {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .pm-saved-meta-row,
+    .pm-saved-time-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+    }
+
+    .pm-saved-sender {
+        font-weight: 800;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-saved-context {
+        color: var(--mud-palette-text-secondary);
+        font-size: .82rem;
+    }
+
+    .pm-saved-content {
+        color: var(--mud-palette-text-primary);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+    }
+
+    .pm-saved-file {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        max-width: 100%;
+        color: var(--mud-palette-primary);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+        .pm-saved-file span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .pm-saved-time-row {
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+    }
+
+    .pm-saved-actions {
+        display: flex;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    @@media (max-width: 720px) {
+        .pm-saved-page {
+            padding: 16px;
+        }
+
+        .pm-saved-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .pm-saved-card {
+            grid-template-columns: 38px minmax(0, 1fr);
+        }
+
+        .pm-saved-actions {
+            grid-column: 2;
+            justify-content: flex-end;
+        }
+    }
+</style>
+
+@code {
+    private readonly HashSet<int> _busyMessageIds = new();
+    private List<SavedMessageDto> _items = new();
+    private string _filterType = "all";
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnLanguageChanged += HandleLanguageChanged;
+        await Loc.LoadAsync();
+        await LoadAsync();
+    }
+
+    private async Task OnFilterChanged(string value)
+    {
+        _filterType = value;
+        await LoadAsync();
+    }
+
+    private string FilterClass(string value) =>
+        string.Equals(_filterType, value, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await SavedMessageService.GetSavedMessagesAsync(new SavedMessageFilterDto
+            {
+                Page = 1,
+                PageSize = 50,
+                Type = _filterType == "all" ? null : _filterType
+            });
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task UnsaveAsync(SavedMessageDto item)
+    {
+        if (!_busyMessageIds.Add(item.MessageId))
+            return;
+
+        var removed = _items.Remove(item);
+        StateHasChanged();
+
+        var ok = await SavedMessageService.UnsaveAsync(item.MessageId);
+        _busyMessageIds.Remove(item.MessageId);
+
+        if (ok)
+        {
+            Snackbar.Add(Loc.T("saved.removed"), Severity.Success);
+            return;
+        }
+
+        if (removed)
+            _items.Add(item);
+
+        Snackbar.Add(Loc.T("saved.removeFailed"), Severity.Warning);
+    }
+
+    private void JumpToOriginal(SavedMessageDto item)
+    {
+        if (item.GroupId.HasValue)
+        {
+            Nav.NavigateTo($"/chat/group/{item.GroupId.Value}?messageId={item.MessageId}");
+            return;
+        }
+
+        if (item.PeerUserId.HasValue)
+            Nav.NavigateTo($"/chat/{item.PeerUserId.Value}?messageId={item.MessageId}");
+    }
+
+    private static string GetConversationContext(SavedMessageDto item)
+    {
+        if (string.Equals(item.ConversationType, "Group", StringComparison.OrdinalIgnoreCase))
+            return $"Group: {(string.IsNullOrWhiteSpace(item.GroupName) ? "#" + item.GroupId : item.GroupName)}";
+
+        return $"DM: {(string.IsNullOrWhiteSpace(item.PeerDisplayName) ? "#" + item.PeerUserId : item.PeerDisplayName)}";
+    }
+
+    private static string GetPreview(SavedMessageDto item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Content))
+            return item.Content;
+
+        return item.MessageType.Equals("Image", StringComparison.OrdinalIgnoreCase)
+            ? "Hình ảnh"
+            : "Tệp đính kèm";
+    }
+
+    private void HandleLanguageChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= HandleLanguageChanged;
+    }
+}

@@ -1,0 +1,669 @@
+{
+  "info": {
+    "name": "PingMe API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "peer_id", "value": "" },
+    { "key": "group_id", "value": "" },
+    { "key": "message_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01. Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has token', () => pm.expect(r.token).to.be.a('string'));",
+            "pm.collectionVariables.set('token', r.token);",
+            "pm.collectionVariables.set('user_id', r.user.id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"testuser1\",\"email\":\"test1@pingme.dev\",\"password\":\"Test123!\",\"displayName\":\"Test User 1\"}" }
+          }
+        },
+        {
+          "name": "Register User 2 (peer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.collectionVariables.set('peer_id', r.user.id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"username\":\"testuser2\",\"email\":\"test2@pingme.dev\",\"password\":\"Test123!\",\"displayName\":\"Test User 2\"}" }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has token', () => pm.expect(r.token).to.be.a('string'));",
+            "pm.collectionVariables.set('token', r.token);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"test1@pingme.dev\",\"password\":\"Test123!\"}" }
+          }
+        },
+        {
+          "name": "Get Me",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has username', () => pm.expect(r.username).to.eql('testuser1'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/auth/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/auth/forgot-password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"test1@pingme.dev\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. User Profile",
+      "item": [
+        {
+          "name": "Get Profile by ID",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has displayName', () => pm.expect(pm.response.json().displayName).to.be.a('string'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/users/{{user_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Profile by Username",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/users/by-username/testuser1",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Update Profile",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Bio updated', () => pm.expect(pm.response.json().bio).to.eql('Hello PingMe!'));"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{base_url}}/api/users/me",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"displayName\":\"Test User Updated\",\"bio\":\"Hello PingMe!\"}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Messages (DM)",
+      "item": [
+        {
+          "name": "Send DM Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has message id', () => pm.expect(r.id).to.be.a('number'));",
+            "pm.collectionVariables.set('message_id', r.id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"receiverId\":{{peer_id}},\"content\":\"Hello from PingMe test!\",\"messageType\":\"Text\"}" }
+          }
+        },
+        {
+          "name": "Send DM with Reply",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has replyToMessageId', () => pm.expect(pm.response.json().replyToMessageId).to.be.a('number'));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"receiverId\":{{peer_id}},\"content\":\"This is a reply!\",\"messageType\":\"Text\",\"replyToMessageId\":{{message_id}}}" }
+          }
+        },
+        {
+          "name": "Get DM Messages",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+            "pm.test('Has messages', () => pm.expect(pm.response.json().length).to.be.greaterThan(0));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/messages/dm/{{peer_id}}?limit=30",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Edit Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{base_url}}/api/messages/{{message_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"content\":\"Edited message content\"}" }
+          }
+        },
+        {
+          "name": "Pin Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH", "url": "{{base_url}}/api/messages/{{message_id}}/pin",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"isPinned\":true}" }
+          }
+        },
+        {
+          "name": "Get Pinned Messages",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has pinned', () => pm.expect(pm.response.json().length).to.be.greaterThan(0));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/messages/pinned?peerId={{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "React to Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages/{{message_id}}/reactions",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"emoji\":\"❤️\"}" }
+          }
+        },
+        {
+          "name": "Remove Reaction",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/messages/{{message_id}}/reactions/❤️",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Mark Message as Read",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages/{{message_id}}/read",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Forward Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has forwardedFromMessageId', () => pm.expect(pm.response.json().forwardedFromMessageId).to.be.a('number'));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages/{{message_id}}/forward?receiverId={{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/messages/{{message_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Groups",
+      "item": [
+        {
+          "name": "Create Group",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has group id', () => pm.expect(r.id).to.be.a('number'));",
+            "pm.collectionVariables.set('group_id', r.id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/groups",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Test Group\",\"description\":\"Group for testing\",\"memberIds\":[{{peer_id}}]}" }
+          }
+        },
+        {
+          "name": "Get My Groups",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has groups', () => pm.expect(pm.response.json().length).to.be.greaterThan(0));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/groups",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Group by ID",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has members', () => pm.expect(pm.response.json().members).to.be.an('array'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/groups/{{group_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Update Group",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT", "url": "{{base_url}}/api/groups/{{group_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"name\":\"Updated Group Name\",\"description\":\"Updated description\"}" }
+          }
+        },
+        {
+          "name": "Send Group Message",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('message_id', pm.response.json().id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/messages",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"groupId\":{{group_id}},\"content\":\"Hello group!\",\"messageType\":\"Text\"}" }
+          }
+        },
+        {
+          "name": "Get Group Messages",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/messages/group/{{group_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Update Member Role",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH", "url": "{{base_url}}/api/groups/{{group_id}}/members/{{peer_id}}/role",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"role\":\"CoAdmin\"}" }
+          }
+        },
+        {
+          "name": "Kick Member",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/groups/{{group_id}}/members/{{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Add Member back",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/groups/{{group_id}}/members",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"userId\":{{peer_id}}}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Conversations",
+      "item": [
+        {
+          "name": "Get All Conversations",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/conversations",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Pin DM Conversation",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/conversations/pin?peerId={{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Set Nickname",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/conversations/nickname",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"targetUserId\":{{peer_id}},\"nickname\":\"Best Friend\"}" }
+          }
+        },
+        {
+          "name": "Set Background",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/conversations/background",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"peerUserId\":{{peer_id}},\"backgroundType\":\"Color\",\"backgroundValue\":\"#7F77DD\"}" }
+          }
+        },
+        {
+          "name": "Unpin Conversation",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/conversations/pin?peerId={{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Search",
+      "item": [
+        {
+          "name": "Search Users and Messages",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has users array', () => pm.expect(r.users).to.be.an('array'));",
+            "pm.test('Has messages array', () => pm.expect(r.messages).to.be.an('array'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/search?q=test",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Block",
+      "item": [
+        {
+          "name": "Block User",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/blocks/{{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Blocked Users",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has blocked user', () => pm.expect(pm.response.json().length).to.eql(1));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/blocks",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Unblock User",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/blocks/{{peer_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Snippets",
+      "item": [
+        {
+          "name": "Create Snippet",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.test('Has shareToken', () => pm.expect(r.shareToken).to.be.a('string'));",
+            "pm.collectionVariables.set('snippet_token', r.shareToken);",
+            "pm.collectionVariables.set('snippet_id', r.id);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/snippets",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"title\":\"Hello World\",\"content\":\"console.log('Hello PingMe!');\",\"language\":\"javascript\"}" }
+          }
+        },
+        {
+          "name": "Get My Snippets",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has snippet', () => pm.expect(pm.response.json().length).to.be.greaterThan(0));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/snippets",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Snippet by Share Token (public)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has content', () => pm.expect(pm.response.json().content).to.be.a('string'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/snippets/share/{{snippet_token}}"
+          }
+        },
+        {
+          "name": "Delete Snippet",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/snippets/{{snippet_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Webhooks",
+      "item": [
+        {
+          "name": "Create Webhook",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.collectionVariables.set('webhook_id', r.id);",
+            "pm.collectionVariables.set('webhook_token', r.token);"
+          ]}}],
+          "request": {
+            "method": "POST", "url": "{{base_url}}/api/webhooks",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"groupId\":{{group_id}},\"name\":\"GitHub CI\"}" }
+          }
+        },
+        {
+          "name": "Get Group Webhooks",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/webhooks/group/{{group_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Toggle Webhook",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH", "url": "{{base_url}}/api/webhooks/{{webhook_id}}/toggle?active=false",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Delete Webhook",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/webhooks/{{webhook_id}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Sessions",
+      "item": [
+        {
+          "name": "Get My Sessions",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has sessions', () => pm.expect(pm.response.json().length).to.be.greaterThan(0));",
+            "pm.collectionVariables.set('session_id', pm.response.json()[0].id);"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/sessions",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Revoke Other Sessions",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 204', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "DELETE", "url": "{{base_url}}/api/sessions/others",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Audit Logs",
+      "item": [
+        {
+          "name": "Get My Logs",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/audit-logs/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get All Logs with Filters",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "GET", "url": "{{base_url}}/api/audit-logs?action=login&page=1&pageSize=10",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    }
+  ]
+}
