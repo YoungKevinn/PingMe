@@ -1,0 +1,152 @@
+@page "/verify-email"
+@using PingMe.Frontend.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@implements IDisposable
+@attribute [AllowAnonymous]
+@layout PingMe.Frontend.Components.Layout.EmptyLayout
+
+<div class="pm-auth-wrapper">
+    <div class="pm-auth-card">
+        <div class="pm-auth-logo">
+            <div class="pm-auth-logo-icon">
+                <MudIcon Icon="@Icons.Material.Filled.MarkEmailRead" Style="color:white;font-size:30px;" />
+            </div>
+            <div>
+                <p class="pm-auth-title">Xác minh email</p>
+                <p class="pm-auth-subtitle">Mã OTP đã gửi đến @_email</p>
+            </div>
+        </div>
+
+        <MudForm @ref="_form">
+            <MudTextField @bind-Value="_otpCode"
+                          Label="Mã OTP (6 số)"
+                          Variant="Variant.Outlined"
+                          MaxLength="6"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Password"
+                          Required="true"
+                          RequiredError="Vui lòng nhập mã OTP"
+                          HelperText="Kiểm tra hộp thư (và thư mục Spam) của bạn"
+                          Class="mb-4" />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="VerifyAsync"
+                       Disabled="@_loading"
+                       Style="height:48px;font-size:1rem;font-weight:600;">
+                @if (_loading) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" Class="mr-2" /> }
+                Xác nhận
+            </MudButton>
+        </MudForm>
+
+        <div style="text-align:center;margin-top:16px;">
+            <MudText Typo="Typo.body2" Style="color:var(--mud-palette-text-secondary)">Không nhận được mã?</MudText>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Primary"
+                       Disabled="@(_countdown > 0 || _resending)"
+                       OnClick="ResendAsync">
+                @if (_resending) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" Class="mr-2" /> }
+                Gửi lại @(_countdown > 0 ? $"({_countdown}s)" : "")
+            </MudButton>
+        </div>
+
+        <div style="text-align:center;margin-top:8px;">
+            <MudLink Href="/register">← Quay lại đăng ký</MudLink>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+
+    private MudForm? _form;
+    private string _email = "";
+    private string _otpCode = "";
+    private bool _loading;
+    private bool _resending;
+    private int _countdown;
+    private System.Timers.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _email = Email ?? "";
+        if (string.IsNullOrWhiteSpace(_email))
+            Nav.NavigateTo("/register");
+
+        StartCountdown();
+    }
+
+    private async Task VerifyAsync()
+    {
+        if (_form == null) return;
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _loading = true;
+        try
+        {
+            var (success, _, message) = await AuthService.VerifyEmailAsync(_email, _otpCode);
+            if (success)
+            {
+                Snackbar.Add("Xác minh thành công! Đang vào ứng dụng...", Severity.Success);
+                await Task.Delay(800);
+                Nav.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                Snackbar.Add(message ?? "Mã OTP không đúng hoặc đã hết hạn.", Severity.Error);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ResendAsync()
+    {
+        if (_countdown > 0) return;
+        _resending = true;
+        try
+        {
+            var (success, message) = await AuthService.ResendVerifyEmailAsync(_email);
+            if (success)
+            {
+                Snackbar.Add("Mã OTP mới đã được gửi.", Severity.Info);
+                StartCountdown();
+            }
+            else
+            {
+                Snackbar.Add(message ?? "Không thể gửi lại mã.", Severity.Error);
+            }
+        }
+        finally
+        {
+            _resending = false;
+        }
+    }
+
+    private void StartCountdown()
+    {
+        _countdown = 60;
+        _timer?.Stop();
+        _timer?.Dispose();
+        _timer = new System.Timers.Timer(1000);
+        _timer.Elapsed += (_, _) =>
+        {
+            if (_countdown > 0) { _countdown--; InvokeAsync(StateHasChanged); }
+            else _timer?.Stop();
+        };
+        _timer.Start();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Stop();
+        _timer?.Dispose();
+    }
+}

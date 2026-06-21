@@ -11,6 +11,9 @@ public interface IAuthService
     Task<(bool Success, string? Error, LoginResponse? Response)> LoginAsync(LoginRequest request, string ipAddress, string? userAgent);
     Task<(bool Success, string? Error)> ForgotPasswordAsync(string email);
     Task<(bool Success, string? Error)> ResetPasswordAsync(string token, string newPassword);
+    Task<(bool Success, string? Error)> ChangePasswordAsync(int userId, string currentPassword, string newPassword);
+    Task<(bool Success, string? Error, LoginResponse? Response)> VerifyEmailOtpAsync(string email, string otpCode, string ipAddress, string? userAgent);
+    Task<(bool Success, string? Error)> ResendEmailOtpAsync(string email);
     Task<UserDto?> GetCurrentUserAsync(int userId);
 }
 
@@ -61,7 +64,8 @@ public class AuthService : IAuthService
             Email = email,
             DisplayName = displayName,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            IsOnline = true,
+            IsOnline = false,
+            IsEmailVerified = false,
             LastLoginIp = ipAddress,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -70,7 +74,22 @@ public class AuthService : IAuthService
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        return await IssueTokenAsync(user, ipAddress, userAgent);
+        // Gửi OTP xác minh email
+        var otpCode = Random.Shared.Next(100000, 999999).ToString();
+        _db.PasswordResetOtps.Add(new PasswordResetOtp
+        {
+            UserId = user.Id,
+            OtpCode = otpCode,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+            IsUsed = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        _ = Task.Run(() => _email.SendEmailVerificationOtpAsync(user.Email, user.DisplayName, otpCode));
+
+        // Trả về token rỗng; FE sẽ redirect sang trang xác minh email
+        return (true, null, null);
     }
 
     public async Task<(bool Success, string? Error, LoginResponse? Response)> LoginAsync(
@@ -103,6 +122,9 @@ public class AuthService : IAuthService
 
         if (!passwordOk)
             return (false, "Email hoặc mật khẩu không đúng.", null);
+
+        if (!user.IsEmailVerified)
+            return (false, "EMAIL_NOT_VERIFIED", null);
 
         if (user.LastLoginIp is not null && user.LastLoginIp != ipAddress)
         {
@@ -164,6 +186,80 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync();
 
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error)> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
+    {
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+            return (false, "Mật khẩu mới phải có tối thiểu 6 ký tự.");
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user is null) return (false, "Người dùng không tồn tại.");
+
+        bool currentOk;
+        try { currentOk = BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash); }
+        catch { return (false, "Mật khẩu hiện tại không hợp lệ."); }
+
+        if (!currentOk) return (false, "Mật khẩu hiện tại không đúng.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return (true, null);
+    }
+
+    public async Task<(bool Success, string? Error, LoginResponse? Response)> VerifyEmailOtpAsync(
+        string email, string otpCode, string ipAddress, string? userAgent)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+        if (user is null) return (false, "Email không tồn tại.", null);
+
+        var otp = await _db.PasswordResetOtps.FirstOrDefaultAsync(o =>
+            o.UserId == user.Id &&
+            o.OtpCode == otpCode &&
+            !o.IsUsed &&
+            o.ExpiresAt > DateTime.UtcNow);
+
+        if (otp is null) return (false, "Mã OTP không hợp lệ hoặc đã hết hạn.", null);
+
+        otp.IsUsed = true;
+        user.IsEmailVerified = true;
+        user.IsOnline = true;
+        user.LastLoginIp = ipAddress;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return await IssueTokenAsync(user, ipAddress, userAgent);
+    }
+
+    public async Task<(bool Success, string? Error)> ResendEmailOtpAsync(string email)
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail);
+        if (user is null) return (true, null); // luôn OK
+
+        if (user.IsEmailVerified) return (false, "Email đã được xác minh.");
+
+        var oneMinuteAgo = DateTime.UtcNow.AddMinutes(-1);
+        var recentOtp = await _db.PasswordResetOtps
+            .AnyAsync(o => o.UserId == user.Id && o.CreatedAt >= oneMinuteAgo && !o.IsUsed);
+        if (recentOtp) return (false, "Vui lòng đợi 1 phút trước khi gửi lại mã.");
+
+        var otpCode = Random.Shared.Next(100000, 999999).ToString();
+        _db.PasswordResetOtps.Add(new PasswordResetOtp
+        {
+            UserId = user.Id,
+            OtpCode = otpCode,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10),
+            IsUsed = false,
+            CreatedAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync();
+
+        _ = Task.Run(() => _email.SendEmailVerificationOtpAsync(user.Email, user.DisplayName, otpCode));
         return (true, null);
     }
 

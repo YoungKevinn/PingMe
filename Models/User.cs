@@ -58,6 +58,8 @@ public class User
 
     public DateTime? PasswordResetTokenExpiry { get; set; }
 
+    public bool IsEmailVerified { get; set; } = false;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

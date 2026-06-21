@@ -32,6 +32,23 @@ public class ResetPasswordRequest
     public string NewPassword { get; set; } = string.Empty;
 }
 
+public class ChangePasswordRequest
+{
+    public string CurrentPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+}
+
+public class VerifyEmailRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string OtpCode { get; set; } = string.Empty;
+}
+
+public class ResendVerifyEmailRequest
+{
+    public string Email { get; set; } = string.Empty;
+}
+
 public class UserDto
 {
     public int Id { get; set; }

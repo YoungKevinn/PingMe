@@ -17,7 +17,7 @@ public class AuthController : ControllerBase
         _auth = auth;
     }
 
-    /// <summary>Đăng ký tài khoản mới</summary>
+    /// <summary>Đăng ký tài khoản mới — trả về email để FE redirect sang trang xác minh OTP</summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
@@ -26,10 +26,33 @@ public class AuthController : ControllerBase
         var ip        = GetIpAddress();
         var userAgent = Request.Headers.UserAgent.ToString();
 
-        var (success, error, response) = await _auth.RegisterAsync(request, ip, userAgent);
+        var (success, error, _) = await _auth.RegisterAsync(request, ip, userAgent);
 
         if (!success) return BadRequest(new { message = error });
+        return Ok(new { message = "Mã OTP đã được gửi về email của bạn.", email = request.Email.Trim().ToLowerInvariant() });
+    }
+
+    /// <summary>Xác minh OTP email sau đăng ký — trả về JWT nếu hợp lệ</summary>
+    [HttpPost("verify-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
+    {
+        var ip        = GetIpAddress();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        var (success, error, response) = await _auth.VerifyEmailOtpAsync(request.Email, request.OtpCode, ip, userAgent);
+        if (!success) return BadRequest(new { message = error });
         return Ok(response);
+    }
+
+    /// <summary>Gửi lại OTP xác minh email</summary>
+    [HttpPost("resend-verify-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendVerifyEmail([FromBody] ResendVerifyEmailRequest request)
+    {
+        var (success, error) = await _auth.ResendEmailOtpAsync(request.Email);
+        if (!success) return BadRequest(new { message = error });
+        return Ok(new { message = "Nếu email đang chờ xác minh, mã mới đã được gửi." });
     }
 
     /// <summary>Đăng nhập — trả về JWT token</summary>
@@ -43,8 +66,27 @@ public class AuthController : ControllerBase
 
         var (success, error, response) = await _auth.LoginAsync(request, ip, userAgent);
 
-        if (!success) return Unauthorized(new { message = error });
+        if (!success)
+        {
+            // Trả code riêng để FE redirect sang trang xác minh email
+            if (error == "EMAIL_NOT_VERIFIED")
+                return StatusCode(403, new { message = "EMAIL_NOT_VERIFIED", email = request.Email });
+            return Unauthorized(new { message = error });
+        }
         return Ok(response);
+    }
+
+    /// <summary>Đổi mật khẩu (cần JWT)</summary>
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? User.FindFirstValue("sub")!);
+
+        var (success, error) = await _auth.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
+        if (!success) return BadRequest(new { message = error });
+        return Ok(new { message = "Đổi mật khẩu thành công." });
     }
 
     /// <summary>Gửi email đặt lại mật khẩu</summary>
@@ -52,7 +94,6 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         await _auth.ForgotPasswordAsync(request.Email);
-        // Luôn trả 200 để không tiết lộ email có tồn tại hay không
         return Ok(new { message = "Nếu email tồn tại, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu." });
     }
 
@@ -78,7 +119,6 @@ public class AuthController : ControllerBase
         return Ok(user);
     }
 
-    /// <summary>Lấy IP thực của client (hỗ trợ reverse proxy)</summary>
     private string GetIpAddress()
     {
         var forwarded = Request.Headers["X-Forwarded-For"].FirstOrDefault();
