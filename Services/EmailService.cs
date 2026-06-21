@@ -10,7 +10,6 @@ public interface IEmailService
     Task SendLoginAnomalyAlertAsync(string toEmail, string toName, string newIp, string oldIp);
     Task SendOtpEmailAsync(string toEmail, string displayName, string otpCode);
     Task SendNewPasswordEmailAsync(string toEmail, string displayName, string newPassword);
-    Task SendEmailVerificationOtpAsync(string toEmail, string displayName, string otpCode);
 }
 
 public class EmailService : IEmailService
@@ -137,46 +136,6 @@ public class EmailService : IEmailService
         catch (Exception ex)
         {
             _logger.LogWarning("Failed to send OTP email to {Email}: {Error}", toEmail, ex.Message);
-        }
-    }
-
-    public async Task SendEmailVerificationOtpAsync(string toEmail, string displayName, string otpCode)
-    {
-        try
-        {
-            var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("PingMe", _settings.SenderEmail));
-            message.To.Add(new MailboxAddress(displayName, toEmail));
-            message.Subject = $"[PingMe] Xác minh email của bạn: {otpCode}";
-
-            message.Body = new TextPart("html")
-            {
-                Text = $@"
-<div style='font-family:sans-serif;max-width:480px;margin:auto;'>
-  <h2 style='color:#2563eb;'>PingMe</h2>
-  <p>Xin chào <b>{displayName}</b>,</p>
-  <p>Cảm ơn bạn đã đăng ký! Hãy nhập mã OTP dưới đây để xác minh địa chỉ email và kích hoạt tài khoản:</p>
-  <div style='font-size:36px;font-weight:bold;letter-spacing:8px;
-              color:#1e293b;background:#f1f5f9;padding:20px;
-              text-align:center;border-radius:8px;margin:24px 0;'>
-    {otpCode}
-  </div>
-  <p>Mã có hiệu lực trong <b>10 phút</b>.</p>
-  <p>Nếu bạn không thực hiện đăng ký này, hãy bỏ qua email này.</p>
-  <hr style='border:none;border-top:1px solid #e2e8f0;margin:24px 0;'/>
-  <p style='color:#94a3b8;font-size:12px;'>PingMe — DevSecOps Collaboration Platform</p>
-</div>"
-            };
-
-            using var smtp = new SmtpClient();
-            await smtp.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, SecureSocketOptions.StartTls);
-            await smtp.AuthenticateAsync(_settings.SenderEmail, _settings.SenderPassword);
-            await smtp.SendAsync(message);
-            await smtp.DisconnectAsync(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Failed to send verification OTP to {Email}: {Error}", toEmail, ex.Message);
         }
     }
 
