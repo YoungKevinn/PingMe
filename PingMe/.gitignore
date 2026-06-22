@@ -1,0 +1,22 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Secrets & env
+appsettings.*.json
+!appsettings.Development.json
+*.pfx
+
+## Uploads
+wwwroot/uploads/
+
+## Rider/VS
+.idea/
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db

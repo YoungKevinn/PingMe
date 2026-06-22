@@ -1,0 +1,918 @@
+@using PingMe.Frontend.Models
+@using PingMe.Frontend.Helpers
+@using System.Text.Json
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ConversationService ConvService
+@inject NavigationManager Nav
+@inject SearchService SearchService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UnreadStateService UnreadState
+@inject LocalizationService Loc
+@implements IDisposable
+
+<div class="pm-conversation-list-root" style="height:100%;display:flex;flex-direction:column;overflow:hidden;">
+
+    <!-- Header -->
+    <div style="padding:16px;border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <p style="margin:0;font-size:1rem;font-weight:700;color:var(--mud-palette-text-primary);letter-spacing:-.01em;">
+                @Loc.T("chat.messagesTitle")
+            </p>
+        </div>
+
+        <MudTooltip Text="Tin nhắn mới">
+            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                           Size="Size.Small"
+                           Color="Color.Primary"
+                           OnClick="@OpenNewChatDialog" />
+        </MudTooltip>
+    </div>
+
+    <!-- Search -->
+    <div style="padding:10px 12px;border-bottom:1px solid rgba(0,0,0,.04);">
+        <MudTextField @bind-Value="_search"
+                      Placeholder='@Loc.T("chat.searchPlaceholder")'
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Immediate="true"
+                      Style="border-radius:20px;" />
+    </div>
+
+    <!-- Conversations -->
+    <div style="flex:1;overflow-y:auto;">
+        @if (_conversations == null)
+        {
+            <div style="display:flex;justify-content:center;padding:32px;">
+                <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Primary" />
+            </div>
+        }
+        else if (!FilteredConversations.Any())
+        {
+            <div class="pm-empty" style="padding:32px 16px;">
+                <MudIcon Icon="@Icons.Material.Outlined.Forum"
+                         Style="font-size:48px;opacity:.2;color:var(--mud-palette-primary);" />
+
+                <p style="margin:8px 0 0;font-size:.875rem;color:#94A3B8;text-align:center;">
+                    Chưa có hội thoại nào
+                </p>
+            </div>
+        }
+        else
+        {
+            @foreach (var conv in FilteredConversations)
+            {
+                var c = conv;
+                var isSelected = (c.Type == "dm" && c.PeerId == SelectedPeerId)
+                || (c.Type == "group" && c.GroupId == SelectedGroupId);
+
+                var avatarUrl = c.Type == "dm"
+                ? BuildAvatarUrl(c.PeerAvatarUrl)
+                : BuildAvatarUrl(c.GroupAvatarUrl);
+
+                <div @key="GetConversationKey(c)"
+                     class="@($"pm-conv-item {(isSelected ? "active" : "")} {(c.UnreadCount > 0 ? "has-unread" : "")}")"
+                     @onclick="() => SelectConversation(c)"
+                     @onmouseenter="() => _hoveredConversationKey = GetConversationKey(c)"
+                     @onmouseleave="() => _hoveredConversationKey = string.Empty"
+                     style="padding:10px 14px;">
+
+                    <!-- Avatar -->
+                    <div class="pm-avatar-wrap" style="flex-shrink:0;">
+                        <MudAvatar Color="@(isSelected? Color.Primary: Color.Default)"
+                                   Style="@(isSelected ? "background:var(--mud-palette-primary);color:white;" : "background:#E2E8F0;color:#475569;")"
+                                   Size="Size.Medium">
+                            @if (c.Type == "group")
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Group" Style="font-size:18px;" />
+                            }
+                            else
+                            {
+                                @GetConversationDisplayName(c).FirstOrDefault()
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                            {
+                                <img src="@avatarUrl"
+                                     alt="@GetConversationDisplayName(c)"
+                                     class="pm-avatar-image"
+                                     loading="lazy"
+                                     decoding="async"
+                                     referrerpolicy="no-referrer"
+                                     onerror="this.style.display='none';this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                            }
+                        </MudAvatar>
+
+                        @if (c.IsOnline && c.Type == "dm")
+                        {
+                            <div class="pm-online-dot"></div>
+                        }
+                    </div>
+
+                    <!-- Info -->
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;">
+                            <span class="@($"pm-conv-name {(c.UnreadCount > 0 ? "unread" : "")}")">
+                                @if (c.IsPinned)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.PushPin"
+                                             Style="font-size:13px;color:var(--mud-palette-primary);margin-right:3px;vertical-align:-2px;" />
+                                }
+
+                                @GetConversationDisplayName(c)
+                            </span>
+
+                            <span class="pm-conv-time">@FormatTime(c.LastMessageAt)</span>
+                        </div>
+
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+                            <span class="@($"pm-conv-preview {(c.UnreadCount > 0 ? "unread" : "")}")">
+                                @if (c.Mentioned)
+                                {
+                                    <span class="pm-mention-marker">@GetMentionPreview(c)</span>
+                                }
+                                else
+                                {
+                                    @c.LastMessage
+                                }
+                            </span>
+
+                            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;min-width:52px;justify-content:flex-end;">
+                                @if (_hoveredConversationKey == GetConversationKey(c))
+                                {
+                                    <div @onclick:stopPropagation="true">
+                                        <MudTooltip Text="@(c.IsPinned ? "Bỏ ghim hội thoại" : "Ghim hội thoại")">
+                                            <MudIconButton Icon="@Icons.Material.Filled.PushPin"
+                                                           Size="Size.Small"
+                                                           Color="@(c.IsPinned ? Color.Primary : Color.Default)"
+                                                           OnClick="() => ToggleConversationPinAsync(c)"
+                                                           Style="width:26px;height:26px;" />
+                                        </MudTooltip>
+                                    </div>
+                                }
+                                @if (c.UnreadCount > 0)
+                                {
+                                    <span class="pm-unread-badge">
+                                        @(c.UnreadCount > 99 ? "99+" : c.UnreadCount.ToString())
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@if (_newChatOpen)
+{
+    <div class="pm-newchat-backdrop" @onclick="CloseNewChatDialog">
+        <div class="pm-newchat-card" @onclick:stopPropagation="true">
+            <div class="pm-newchat-header">
+                <div>
+                    <MudText Typo="Typo.h6">Tin nhắn mới</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Tìm người dùng để bắt đầu cuộc trò chuyện.
+                    </MudText>
+                </div>
+
+                <button type="button"
+                        class="pm-newchat-close"
+                        @onclick="CloseNewChatDialog">
+                    ×
+                </button>
+            </div>
+
+            <div class="pm-newchat-body">
+                <MudTextField T="string"
+                              Value="@_searchUser"
+                              ValueChanged="@OnSearchUserChanged"
+                              Label="Tìm người dùng..."
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              FullWidth="true" />
+
+                @if (_searchingUser)
+                {
+                    <div style="display:flex;justify-content:center;padding:16px;">
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    </div>
+                }
+                else if (_searchResults.Any())
+                {
+                    <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;max-height:360px;overflow:auto;">
+                        @foreach (var u in _searchResults)
+                        {
+                            var user = u;
+                            var userAvatarUrl = UrlHelper.BuildBackendUrl(user.AvatarUrl, _avatarVersion);
+
+                            <button type="button"
+                                    class="pm-newchat-user"
+                                    @onclick="@(() => StartChat(user.Id))">
+                                <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                    <span>@user.DisplayName.FirstOrDefault()</span>
+                                    @if (!string.IsNullOrWhiteSpace(userAvatarUrl))
+                                    {
+                                        <img src="@userAvatarUrl"
+                                             alt="@user.DisplayName"
+                                             class="pm-avatar-image"
+                                             loading="lazy"
+                                             decoding="async"
+                                             referrerpolicy="no-referrer"
+                                             onerror="this.style.display='none';this.parentElement.classList.add('pm-avatar-fallback-active');" />
+                                    }
+                                </MudAvatar>
+
+                                <div style="min-width:0;text-align:left;">
+                                    <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        @user.DisplayName
+                                    </div>
+
+                                    <div style="font-size:12px;color:var(--mud-palette-text-secondary);">
+                                        @@@user.Username
+                                    </div>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_searchUser))
+                {
+                    <div style="padding:16px;text-align:center;color:var(--mud-palette-text-secondary);">
+                        Không tìm thấy người dùng phù hợp.
+                    </div>
+                }
+            </div>
+
+            <div class="pm-newchat-actions">
+                <button type="button"
+                        class="pm-newchat-cancel"
+                        @onclick="CloseNewChatDialog">
+                    Hủy
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .pm-conversation-list-root {
+        padding-top: 8px;
+    }
+
+        .pm-conversation-list-root .pm-conv-item {
+            background: transparent !important;
+            color: var(--mud-palette-text-primary) !important;
+        }
+
+            .pm-conversation-list-root .pm-conv-item:hover {
+                background: rgba(59, 130, 246, .08) !important;
+            }
+
+            .pm-conversation-list-root .pm-conv-item.active {
+                background: rgba(59, 130, 246, .14) !important;
+                border-right: 3px solid var(--mud-palette-primary) !important;
+            }
+
+        .pm-conversation-list-root .pm-conv-name {
+            color: var(--mud-palette-text-primary) !important;
+        }
+
+        .pm-conversation-list-root .pm-conv-name.unread {
+            font-weight: 800;
+        }
+
+        .pm-conversation-list-root .pm-conv-item.has-unread .pm-conv-name {
+            font-weight: 800;
+        }
+
+        .pm-conversation-list-root .pm-conv-item.active .pm-conv-name {
+            color: var(--mud-palette-primary) !important;
+        }
+
+        .pm-conversation-list-root .pm-conv-preview,
+        .pm-conversation-list-root .pm-conv-time {
+            color: var(--mud-palette-text-secondary) !important;
+        }
+
+    .pm-avatar-wrap {
+        position: relative;
+    }
+
+    .pm-conv-preview.unread {
+        color: var(--mud-palette-text-primary) !important;
+        font-weight: 800;
+    }
+
+    .pm-conversation-list-root .pm-conv-item.has-unread .pm-conv-preview {
+        color: var(--mud-palette-text-primary) !important;
+        font-weight: 800;
+    }
+
+    .pm-mention-marker {
+        color: #DC2626;
+        font-weight: 800;
+    }
+
+    .pm-unread-badge {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 7px;
+        border-radius: 999px;
+        background: #EF4444;
+        color: #FFFFFF;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, .30);
+        flex-shrink: 0;
+    }
+
+    .pm-newchat-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 260000;
+        background: rgba(2, 6, 23, .52);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+    }
+
+    .pm-newchat-card {
+        width: min(460px, 100%);
+        max-height: calc(100vh - 40px);
+        overflow: hidden;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+
+    .pm-newchat-header {
+        padding: 18px 20px 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+    }
+
+    .pm-newchat-close {
+        width: 34px;
+        height: 34px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mud-palette-text-secondary);
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+        .pm-newchat-close:hover {
+            background: rgba(148, 163, 184, .16);
+            color: var(--mud-palette-text-primary);
+        }
+
+    .pm-newchat-body {
+        padding: 10px 20px 16px;
+        overflow: auto;
+    }
+
+    .pm-newchat-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: 12px 20px 18px;
+        border-top: 1px solid var(--mud-palette-divider);
+    }
+
+    .pm-newchat-cancel {
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 999px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        padding: 8px 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .pm-newchat-cancel:hover {
+            background: rgba(148, 163, 184, .14);
+        }
+
+    .pm-newchat-user {
+        width: 100%;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mud-palette-text-primary);
+        border-radius: 14px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+    }
+
+        .pm-newchat-user:hover {
+            background: rgba(59, 130, 246, .12);
+            border-color: rgba(59, 130, 246, .22);
+        }
+</style>
+
+@code {
+    [Parameter] public int? SelectedPeerId { get; set; }
+    [Parameter] public int? SelectedGroupId { get; set; }
+    [Parameter] public EventCallback<ConversationDto> OnConversationSelected { get; set; }
+
+    private List<ConversationDto>? _conversations;
+    private string _search = "";
+    private bool _newChatOpen;
+    private string _searchUser = "";
+    private string _hoveredConversationKey = string.Empty;
+    private bool _searchingUser;
+    private List<UserSearchResult> _searchResults = new();
+    private int CurrentUserId;
+    private readonly Dictionary<string, int> _lastAppliedMessageIds = new();
+    private readonly HashSet<int> _mentionMessageIds = new();
+    private CancellationTokenSource? _searchUserDebounceCts;
+
+    private long _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    public IEnumerable<ConversationDto> FilteredConversations =>
+        (_conversations?.Where(c => string.IsNullOrWhiteSpace(_search)
+            || GetConversationDisplayName(c).Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || c.LastMessage?.Contains(_search, StringComparison.OrdinalIgnoreCase) == true)
+            .OrderByDescending(c => c.IsPinned)
+            .ThenByDescending(c => c.LastMessageAt ?? DateTime.MinValue))
+        ?? Enumerable.Empty<ConversationDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnLanguageChanged += HandleLanguageChanged;
+        await Loc.LoadAsync();
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? authState.User.FindFirst("sub")?.Value;
+
+        CurrentUserId = int.TryParse(idClaim, out var id) ? id : 0;
+
+        await RefreshAsync();
+    }
+
+    public async Task RefreshAsync()
+    {
+        _conversations = await ConvService.GetConversationsAsync();
+        _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        PublishUnreadTotal();
+        StateHasChanged();
+    }
+
+    public async Task ApplyIncomingMessageAsync(MessageResponse message, bool isCurrentConversation)
+    {
+        if (_conversations == null || CurrentUserId <= 0)
+            return;
+
+        var key = GetMessageConversationKey(message);
+
+        if (key != null &&
+            _lastAppliedMessageIds.TryGetValue(key, out var lastMessageId) &&
+            lastMessageId == message.Id)
+        {
+            return;
+        }
+
+        var conversation = FindConversation(message);
+
+        if (conversation == null)
+        {
+            await RefreshAsync();
+            return;
+        }
+
+        conversation.LastMessage = BuildLastMessagePreview(message);
+        conversation.LastMessageAt = message.CreatedAt;
+
+        if (isCurrentConversation || message.SenderId == CurrentUserId)
+        {
+            conversation.UnreadCount = 0;
+            conversation.Mentioned = false;
+            conversation.MentionedByName = null;
+            conversation.MentionPreview = null;
+        }
+        else
+        {
+            if (!_mentionMessageIds.Contains(message.Id))
+                conversation.UnreadCount++;
+        }
+
+        if (key != null)
+            _lastAppliedMessageIds[key] = message.Id;
+
+        PublishUnreadTotal();
+        StateHasChanged();
+    }
+
+    public Task MarkConversationReadAsync(int? peerId, int? groupId)
+    {
+        if (_conversations == null)
+            return Task.CompletedTask;
+
+        var conversation = _conversations.FirstOrDefault(c =>
+            (groupId.HasValue && c.Type == "group" && c.GroupId == groupId) ||
+            (peerId.HasValue && c.Type == "dm" && c.PeerId == peerId));
+
+        if (conversation != null && (conversation.UnreadCount != 0 || conversation.Mentioned))
+        {
+            conversation.UnreadCount = 0;
+            conversation.Mentioned = false;
+            conversation.MentionedByName = null;
+            conversation.MentionPreview = null;
+            PublishUnreadTotal();
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public async Task MarkGroupMentionedAsync(int groupId, int messageId, bool isCurrentConversation, string? senderDisplayName)
+    {
+        if (_conversations == null)
+            await RefreshAsync();
+
+        if (_conversations == null)
+            return;
+
+        var conversation = _conversations.FirstOrDefault(c =>
+            c.Type == "group" && c.GroupId == groupId);
+
+        if (conversation == null)
+        {
+            await RefreshAsync();
+            conversation = _conversations?.FirstOrDefault(c =>
+                c.Type == "group" && c.GroupId == groupId);
+        }
+
+        if (conversation == null)
+            return;
+
+        _mentionMessageIds.Add(messageId);
+
+        if (isCurrentConversation)
+        {
+            conversation.UnreadCount = 0;
+            conversation.Mentioned = false;
+            conversation.MentionedByName = null;
+            conversation.MentionPreview = null;
+        }
+        else
+        {
+            conversation.Mentioned = true;
+            conversation.MentionedByName = senderDisplayName;
+            conversation.MentionPreview = BuildMentionPreview(senderDisplayName);
+            if (conversation.UnreadCount <= 0)
+                conversation.UnreadCount = 1;
+        }
+
+        PublishUnreadTotal();
+        StateHasChanged();
+    }
+
+    public Task UpdateConversationTitleAsync(int? peerId, int? groupId, string title, string? avatarUrl = null)
+    {
+        if (_conversations == null)
+            return Task.CompletedTask;
+
+        var conversation = _conversations.FirstOrDefault(c =>
+            (groupId.HasValue && c.Type == "group" && c.GroupId == groupId) ||
+            (peerId.HasValue && c.Type == "dm" && c.PeerId == peerId));
+
+        if (conversation is null)
+            return Task.CompletedTask;
+
+        if (conversation.Type == "group")
+        {
+            conversation.GroupName = title;
+
+            if (avatarUrl is not null)
+                conversation.GroupAvatarUrl = avatarUrl;
+        }
+        else
+        {
+            conversation.PeerDisplayName = title;
+
+            if (avatarUrl is not null)
+                conversation.PeerAvatarUrl = avatarUrl;
+        }
+
+        _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private ConversationDto? FindConversation(MessageResponse message)
+    {
+        if (message.GroupId.HasValue)
+        {
+            return _conversations?.FirstOrDefault(c =>
+                c.Type == "group" &&
+                c.GroupId == message.GroupId.Value);
+        }
+
+        var peerId = message.SenderId == CurrentUserId
+            ? message.ReceiverId
+            : message.SenderId;
+
+        return _conversations?.FirstOrDefault(c =>
+            c.Type == "dm" &&
+            c.PeerId == peerId);
+    }
+
+    private string? GetMessageConversationKey(MessageResponse message)
+    {
+        if (message.GroupId.HasValue)
+            return $"group:{message.GroupId.Value}";
+
+        var peerId = message.SenderId == CurrentUserId
+            ? message.ReceiverId
+            : message.SenderId;
+
+        return peerId.HasValue ? $"dm:{peerId.Value}" : null;
+    }
+
+    private static string BuildLastMessagePreview(MessageResponse message)
+    {
+        if (message.IsDeleted)
+            return "Tin nhắn đã thu hồi";
+
+        if (message.Attachments?.Any() == true)
+        {
+            var attachment = message.Attachments.First();
+            return attachment.IsImage ? "Hình ảnh" : $"Tệp: {attachment.FileName}";
+        }
+
+        if (string.Equals(message.MessageType, "Image", StringComparison.OrdinalIgnoreCase))
+            return "Hình ảnh";
+
+        if (string.Equals(message.MessageType, "File", StringComparison.OrdinalIgnoreCase))
+            return "Tệp đính kèm";
+
+        if (string.Equals(message.MessageType, "Reminder", StringComparison.OrdinalIgnoreCase))
+            return TruncatePreview(BuildCommandPreview(message.Content, "reminder") ?? "⏰ Nhắc việc");
+
+        if (string.Equals(message.MessageType, "Task", StringComparison.OrdinalIgnoreCase))
+            return TruncatePreview(BuildCommandPreview(message.Content, "task") ?? "✅ Task");
+
+        if (string.Equals(message.MessageType, "Vulnerability", StringComparison.OrdinalIgnoreCase))
+            return TruncatePreview(BuildCommandPreview(message.Content, "vulnerability") ?? "🐞 Finding");
+
+        if (string.Equals(message.MessageType, "Cve", StringComparison.OrdinalIgnoreCase))
+            return TruncatePreview(BuildCommandPreview(message.Content, "ioc") ?? "🛡 IOC");
+
+        var commandPreview = BuildCommandPreview(message.Content, null);
+        if (!string.IsNullOrWhiteSpace(commandPreview))
+            return TruncatePreview(commandPreview);
+
+        return string.IsNullOrWhiteSpace(message.Content)
+            ? "(Tin nhắn trống)"
+            : TruncatePreview(message.Content);
+    }
+
+    private static string? BuildCommandPreview(string? content, string? expectedType)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        var trimmed = content.Trim();
+
+        if (trimmed.StartsWith("/ioc ", StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = trimmed.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3)
+                return $"🛡 IOC: {parts[2]}";
+        }
+
+        if (!trimmed.StartsWith('{'))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(trimmed);
+            var root = doc.RootElement;
+            var type = GetString(root, "type");
+
+            if (!string.IsNullOrWhiteSpace(expectedType) &&
+                !string.Equals(type, expectedType, StringComparison.OrdinalIgnoreCase) &&
+                !(string.Equals(expectedType, "vulnerability", StringComparison.OrdinalIgnoreCase) &&
+                  string.Equals(type, "finding", StringComparison.OrdinalIgnoreCase)))
+            {
+                return null;
+            }
+
+            return type?.Trim().ToLowerInvariant() switch
+            {
+                "reminder" => $"⏰ Nhắc việc: {GetString(root, "text") ?? "nhắc việc"}",
+                "task" => $"✅ Task: {GetString(root, "title") ?? "task"}",
+                "vulnerability" or "finding" => $"🐞 Finding: {GetString(root, "title") ?? "finding"}",
+                "ioc" => $"🛡 IOC: {GetString(root, "value") ?? GetString(root, "title") ?? "IOC"}",
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? GetString(JsonElement element, string propertyName)
+        => element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string TruncatePreview(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "(Tin nhắn trống)";
+
+        var normalized = value.Replace("\r", " ").Replace("\n", " ").Trim();
+        return normalized.Length <= 140 ? normalized : normalized[..137] + "...";
+    }
+
+    private static string GetMentionPreview(ConversationDto conversation)
+        => !string.IsNullOrWhiteSpace(conversation.MentionPreview)
+            ? conversation.MentionPreview
+            : BuildMentionPreview(conversation.MentionedByName);
+
+    private static string BuildMentionPreview(string? senderDisplayName)
+        => string.IsNullOrWhiteSpace(senderDisplayName)
+            ? "Có người đã nhắc đến bạn"
+            : $"{senderDisplayName.Trim()} đã nhắc đến bạn";
+
+    private void PublishUnreadTotal()
+    {
+        var total = _conversations?.Sum(c => Math.Max(0, c.UnreadCount)) ?? 0;
+        UnreadState.SetTotal(total);
+    }
+
+    private string? BuildAvatarUrl(string? avatarUrl)
+    {
+        return UrlHelper.BuildBackendUrl(avatarUrl, _avatarVersion);
+    }
+
+    private static string GetConversationKey(ConversationDto c)
+    {
+        return c.Type == "group"
+            ? $"group:{c.GroupId}"
+            : $"dm:{c.PeerId}";
+    }
+
+    private async Task ToggleConversationPinAsync(ConversationDto c)
+    {
+        var ok = c.IsPinned
+            ? await ConvService.UnpinConversationAsync(c.PeerId, c.GroupId)
+            : await ConvService.PinConversationAsync(c.PeerId, c.GroupId);
+
+        if (!ok)
+            return;
+
+        c.IsPinned = !c.IsPinned;
+        StateHasChanged();
+    }
+
+    private void SelectConversation(ConversationDto c)
+    {
+        if (c.Type == "dm" && c.PeerId.HasValue)
+            Nav.NavigateTo($"/chat/{c.PeerId}");
+        else if (c.Type == "group" && c.GroupId.HasValue)
+            Nav.NavigateTo($"/chat/group/{c.GroupId}");
+
+        OnConversationSelected.InvokeAsync(c);
+    }
+
+    private void OpenNewChatDialog()
+    {
+        _newChatOpen = true;
+        _searchUser = string.Empty;
+        _searchResults.Clear();
+    }
+
+    private void CloseNewChatDialog()
+    {
+        _newChatOpen = false;
+        _searchUser = string.Empty;
+        _searchingUser = false;
+        _searchResults.Clear();
+        StateHasChanged();
+    }
+
+    private async Task OnSearchUserChanged(string value)
+    {
+        _searchUser = value;
+        _searchUserDebounceCts?.Cancel();
+
+        if (string.IsNullOrWhiteSpace(_searchUser))
+        {
+            _searchResults.Clear();
+            _searchingUser = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (_searchUser.Trim().Length < 2)
+        {
+            _searchResults.Clear();
+            _searchingUser = false;
+            StateHasChanged();
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _searchUserDebounceCts = cts;
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _searchingUser = true;
+        StateHasChanged();
+
+        try
+        {
+            var term = _searchUser.Trim();
+            var result = await SearchService.SearchAsync(term, 10);
+            if (cts.IsCancellationRequested || !string.Equals(term, _searchUser.Trim(), StringComparison.Ordinal))
+                return;
+
+            _searchResults = result?.Users ?? new List<UserSearchResult>();
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                _searchingUser = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void StartChat(int userId)
+    {
+        CloseNewChatDialog();
+        Nav.NavigateTo($"/chat/{userId}");
+    }
+
+    private string FormatTime(DateTime? dt)
+    {
+        if (!dt.HasValue)
+            return "";
+
+        var local = dt.Value.ToLocalTime();
+        var now = DateTime.Now;
+
+        if (local.Date == now.Date)
+            return local.ToString("HH:mm");
+
+        if (local.Date == now.Date.AddDays(-1))
+            return Loc.T("time.yesterday");
+
+        if ((now - local).TotalDays < 7)
+            return local.ToString("ddd");
+
+        return local.ToString("dd/MM");
+    }
+
+    private string GetConversationDisplayName(ConversationDto conversation)
+    {
+        if (conversation.Type.Equals("group", StringComparison.OrdinalIgnoreCase))
+            return conversation.GroupName ?? Loc.T("chat.groupLabel");
+
+        return conversation.PeerDisplayName ?? string.Empty;
+    }
+
+    public void Dispose()
+    {
+        Loc.OnLanguageChanged -= HandleLanguageChanged;
+        _searchUserDebounceCts?.Cancel();
+        _searchUserDebounceCts?.Dispose();
+    }
+
+    private void HandleLanguageChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+}

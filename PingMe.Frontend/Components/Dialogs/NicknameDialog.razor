@@ -1,0 +1,116 @@
+@using PingMe.Frontend.Models
+@inject ConversationService ConversationService
+@inject ISnackbar Snackbar
+
+<div class="pm-dialog-panel">
+    <div class="pm-dialog-title">
+        <MudText Typo="Typo.h6">Đặt biệt danh</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Small"
+                       ButtonType="ButtonType.Button"
+                       OnClick="CloseAsync"
+                       AriaLabel="Đóng" />
+    </div>
+
+    <div class="pm-dialog-body">
+        <MudTextField @bind-Value="_nickname"
+                      Label="Biệt danh"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      MaxLength="100"
+                      Immediate="true" />
+    </div>
+
+    <div class="pm-dialog-actions">
+        <MudButton Variant="Variant.Text" ButtonType="ButtonType.Button" OnClick="CloseAsync">Đóng</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   ButtonType="ButtonType.Button"
+                   Disabled="@_saving"
+                   OnClick="SaveAsync">
+            Lưu
+        </MudButton>
+    </div>
+</div>
+
+<style>
+    .pm-dialog-panel {
+        display: flex;
+        flex-direction: column;
+        max-height: min(90vh, 720px);
+    }
+
+    .pm-dialog-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        padding: 16px 20px 10px;
+    }
+
+    .pm-dialog-body {
+        padding: 8px 20px 16px;
+        overflow: auto;
+    }
+
+    .pm-dialog-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 20px 16px;
+    }
+</style>
+
+@code {
+    [Parameter] public int PeerId { get; set; }
+    [Parameter] public string? InitialNickname { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnSaved { get; set; }
+
+    private string _nickname = string.Empty;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        _nickname = InitialNickname ?? string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            var nickname = _nickname.Trim();
+            var ok = await ConversationService.SetNicknameAsync(new SetNicknameRequest
+            {
+                TargetUserId = PeerId,
+                Nickname = nickname
+            });
+
+            if (!ok)
+            {
+                Snackbar.Add("Không thể cập nhật biệt danh.", Severity.Warning);
+                return;
+            }
+
+            Snackbar.Add(string.IsNullOrWhiteSpace(nickname)
+                ? "Đã xóa biệt danh."
+                : "Đã cập nhật biệt danh.", Severity.Success);
+            await OnSaved.InvokeAsync(nickname);
+            await OnClose.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Không thể cập nhật biệt danh.", Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

@@ -1,0 +1,7 @@
+bin/
+obj/
+.dotnet_home/
+.vs/
+*.user
+*.suo
+publish/

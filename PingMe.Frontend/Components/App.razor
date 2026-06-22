@@ -1,0 +1,32 @@
+<MudThemeProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+
+                <Authorizing>
+                    <LayoutView Layout="@typeof(Layout.MainLayout)">
+                        <div class="d-flex justify-center align-center" style="height:80vh;">
+                            <MudProgressCircular Indeterminate="true" />
+                        </div>
+                    </LayoutView>
+                </Authorizing>
+            </AuthorizeRouteView>
+
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+
+        <NotFound>
+            <LayoutView Layout="@typeof(Layout.MainLayout)">
+                <MudText Align="Align.Center">Không tìm thấy trang</MudText>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

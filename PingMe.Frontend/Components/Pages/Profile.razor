@@ -1,0 +1,1192 @@
+@page "/profile"
+@attribute [Authorize]
+@using PingMe.Frontend.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject UserService UserService
+@inject AuthService AuthService
+@inject ISnackbar Snackbar
+@using System.IO
+<MudContainer MaxWidth="MaxWidth.Medium" Class="pa-4">
+    <div class="pm-profile-page-title">
+        <p class="pm-page-title">Hồ sơ cá nhân</p>
+        <p class="pm-page-subtitle">Xem thông tin tài khoản nội bộ của bạn</p>
+    </div>
+
+    @if (_loading)
+    {
+        <div style="display:flex;justify-content:center;padding:40px;">
+            <MudProgressCircular Indeterminate Color="Color.Primary" />
+        </div>
+    }
+    else if (_profile == null)
+    {
+        <MudAlert Severity="Severity.Error">
+            Không tải được hồ sơ. Vui lòng đăng nhập lại.
+        </MudAlert>
+    }
+    else
+    {
+        <div class="pm-profile-view-card">
+            <div class="pm-profile-cover">
+                <MudTooltip Text="Chỉnh sửa hồ sơ">
+                    <button type="button"
+                            class="pm-profile-edit-float"
+                            @onclick="OpenEditProfile">
+                        <MudIcon Icon="@Icons.Material.Filled.Edit" Style="font-size:20px;" />
+                        <span>Chỉnh sửa</span>
+                    </button>
+                </MudTooltip>
+            </div>
+
+            <div class="pm-profile-view-body">
+                <div class="pm-profile-view-top">
+                    <div class="pm-profile-avatar-wrap">
+                        <MudTooltip Text="Bấm để chỉnh sửa ảnh đại diện">
+                            <button type="button"
+                                    class="pm-profile-avatar-button"
+                                    @onclick="OpenEditProfile">
+                                <MudAvatar Class="pm-profile-avatar">
+                                    @{
+                                        var avatarUrl = GetAvatarUrl();
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(avatarUrl))
+                                    {
+                                        <MudImage Src="@avatarUrl" />
+                                    }
+                                    else
+                                    {
+                                        @_profile.DisplayName?.FirstOrDefault()
+                                    }
+                                </MudAvatar>
+
+                                <span class="pm-profile-avatar-camera">
+                                    <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Style="font-size:16px;" />
+                                </span>
+                            </button>
+                        </MudTooltip>
+                    </div>
+                    <div class="pm-profile-title-block">
+                        <div class="pm-profile-name">@_profile.DisplayName</div>
+                        <div class="pm-profile-email">@_profile.Email</div>
+
+                        <div class="pm-profile-chips">
+                            <span>@DisplayValue(_profile.JobTitle, "Chưa có chức vụ")</span>
+                            <span>@DisplayValue(_profile.Department, "Chưa có bộ phận")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <MudDivider Class="my-4" />
+
+                <div class="pm-profile-info-grid">
+                    <div class="pm-profile-info-item">
+                        <div class="label">Username</div>
+                        <div class="value">@DisplayValue(_profile.Username)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Email</div>
+                        <div class="value">@DisplayValue(_profile.Email)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Chức vụ</div>
+                        <div class="value">@DisplayValue(_profile.JobTitle)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Bộ phận / Team</div>
+                        <div class="value">@DisplayValue(_profile.Department)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Vị trí làm việc</div>
+                        <div class="value">@DisplayValue(_profile.WorkLocation)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Số điện thoại</div>
+                        <div class="value">@DisplayValue(_profile.PhoneNumber)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Ngày sinh</div>
+                        <div class="value">@FormatDateOfBirth(_profile.DateOfBirth)</div>
+                    </div>
+
+                    <div class="pm-profile-info-item">
+                        <div class="label">Trạng thái</div>
+                        <div class="value">
+                            @if (_profile.IsOnline)
+                            {
+                                <span class="pm-status-online">● Đang online</span>
+                            }
+                            else
+                            {
+                                <span>@(_profile.LastSeen?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Không rõ")</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pm-profile-bio">
+                    <div class="label">Giới thiệu</div>
+                    <p>@DisplayValue(_profile.Bio, "Chưa có giới thiệu.")</p>
+                </div>
+
+                <MudDivider Class="my-4" />
+
+                <div class="pm-profile-security-section">
+                    <div class="pm-profile-security-header">
+                        <MudIcon Icon="@Icons.Material.Filled.Security" Style="font-size:20px;color:var(--mud-palette-primary);" />
+                        <span>Bảo mật tài khoản</span>
+                    </div>
+                    <div class="pm-profile-security-row">
+                        <div>
+                            <div class="pm-profile-security-title">Mật khẩu</div>
+                            <div class="pm-profile-security-desc">Thay đổi mật khẩu đăng nhập của bạn</div>
+                        </div>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Lock"
+                                   OnClick="OpenChangePassword"
+                                   Size="Size.Small">
+                            Đổi mật khẩu
+                        </MudButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</MudContainer>
+
+@if (_editOpen && _profile != null)
+{
+    <div class="pm-profile-modal-backdrop" @onclick="CloseEditProfile">
+        <div class="pm-profile-modal-card" @onclick:stopPropagation="true">
+            <div class="pm-profile-modal-header">
+                <div>
+                    <MudText Typo="Typo.h6">Chỉnh sửa hồ sơ</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Cập nhật thông tin hiển thị trong PingMe.
+                    </MudText>
+                </div>
+
+                <button type="button"
+                        class="pm-profile-modal-close"
+                        @onclick="CloseEditProfile">
+                    ×
+                </button>
+            </div>
+
+            <div class="pm-profile-modal-body">
+                <MudForm @ref="_form">
+                    <div class="pm-edit-avatar-row">
+                        <label for="avatarUpload" class="pm-edit-avatar-button">
+                            <MudAvatar Class="pm-edit-avatar">
+                                @if (!string.IsNullOrEmpty(GetAvatarUrl()))
+                                {
+                                    <MudImage Src="@GetAvatarUrl()" />
+                                }
+                                else
+                                {
+                                    @_profile.DisplayName?.FirstOrDefault()
+                                }
+                            </MudAvatar>
+
+                            <span class="pm-edit-avatar-camera">
+                                <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Style="font-size:15px;" />
+                            </span>
+                        </label>
+
+                        <div>
+                            <label for="avatarUpload" class="pm-avatar-upload-btn">
+                                <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Style="font-size:17px;" />
+                                Đổi ảnh đại diện
+                            </label>
+
+                            <InputFile id="avatarUpload"
+                                       OnChange="OnAvatarSelected"
+                                       accept="image/png,image/jpeg,image/jpg,image/webp"
+                                       style="display:none;" />
+
+                            @if (!string.IsNullOrWhiteSpace(_selectedAvatarFileName))
+                            {
+                                <div class="pm-avatar-selected">
+                                    Đã chọn: @_selectedAvatarFileName
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="pm-edit-grid">
+                        <MudTextField @bind-Value="_edit.DisplayName"
+                                      Label="Tên hiển thị"
+                                      Variant="Variant.Outlined"
+                                      Required="true"
+                                      RequiredError="Tên hiển thị không được trống"
+                                      Class="mb-3" />
+
+                        <MudTextField Value="@_profile.Email"
+                                      Label="Email"
+                                      Variant="Variant.Outlined"
+                                      ReadOnly="true"
+                                      Class="mb-3" />
+
+                        <MudTextField @bind-Value="_edit.JobTitle"
+                                      Label="Chức vụ"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-3" />
+
+                        <MudTextField @bind-Value="_edit.Department"
+                                      Label="Bộ phận / Team"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-3" />
+
+                        <MudTextField @bind-Value="_edit.WorkLocation"
+                                      Label="Vị trí làm việc"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-3" />
+
+                        <MudTextField @bind-Value="_edit.PhoneNumber"
+                                      Label="Số điện thoại"
+                                      Variant="Variant.Outlined"
+                                      Class="mb-3" />
+
+                        <div class="pm-native-date-field mb-3">
+                            <label>Ngày sinh</label>
+                            <input type="date"
+                                   class="pm-native-date-input"
+                                   value="@_dateOfBirthText"
+                                   @onchange="OnDateOfBirthChanged" />
+                        </div>
+
+                        <MudTextField Value="@_profile.Username"
+                                      Label="Username"
+                                      Variant="Variant.Outlined"
+                                      ReadOnly="true"
+                                      Class="mb-3" />
+                    </div>
+
+                    <MudTextField @bind-Value="_edit.Bio"
+                                  Label="Giới thiệu"
+                                  Variant="Variant.Outlined"
+                                  Lines="4"
+                                  Placeholder="Giới thiệu về bản thân..."
+                                  Class="mb-2"
+                                  FullWidth="true" />
+                </MudForm>
+            </div>
+
+            <div class="pm-profile-modal-actions">
+                <MudButton ButtonType="ButtonType.Button"
+                           Variant="Variant.Text"
+                           OnClick="CloseEditProfile"
+                           Disabled="@_saving">
+                    Hủy
+                </MudButton>
+
+                <MudButton ButtonType="ButtonType.Button"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="OpenConfirmSaveAsync"
+                           Disabled="@_saving">
+                    Tiếp tục
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_changePasswordOpen)
+{
+    <div class="pm-profile-modal-backdrop confirm" @onclick="CloseChangePassword">
+        <div class="pm-confirm-card" @onclick:stopPropagation="true" style="max-width:420px;">
+            <div class="pm-confirm-icon">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Style="font-size:34px;" />
+            </div>
+
+            <MudText Typo="Typo.h6" Class="font-weight-bold">Đổi mật khẩu</MudText>
+
+            <MudForm @ref="_changePwForm" Style="width:100%;margin-top:16px;">
+                <MudTextField @bind-Value="_currentPassword"
+                              Label="Mật khẩu hiện tại"
+                              Variant="Variant.Outlined"
+                              InputType="@(_showCurrentPw ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showCurrentPw ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                              OnAdornmentClick="() => _showCurrentPw = !_showCurrentPw"
+                              Required="true"
+                              RequiredError="Vui lòng nhập mật khẩu hiện tại"
+                              Class="mb-3" />
+
+                <MudTextField @bind-Value="_newPassword"
+                              Label="Mật khẩu mới (tối thiểu 6 ký tự)"
+                              Variant="Variant.Outlined"
+                              InputType="@(_showNewPw ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showNewPw ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                              OnAdornmentClick="() => _showNewPw = !_showNewPw"
+                              Required="true"
+                              RequiredError="Vui lòng nhập mật khẩu mới"
+                              Class="mb-3" />
+
+                <MudTextField @bind-Value="_confirmNewPassword"
+                              Label="Xác nhận mật khẩu mới"
+                              Variant="Variant.Outlined"
+                              InputType="@(_showConfirmPw ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showConfirmPw ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                              OnAdornmentClick="() => _showConfirmPw = !_showConfirmPw"
+                              Required="true"
+                              RequiredError="Vui lòng xác nhận mật khẩu mới"
+                              Validation="@(new Func<string, string?>(ValidateNewPasswordsMatch))"
+                              Class="mb-3" />
+            </MudForm>
+
+            <div class="pm-confirm-actions">
+                <MudButton Variant="Variant.Text"
+                           OnClick="CloseChangePassword"
+                           Disabled="@_changingPassword">
+                    Hủy
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="ChangePasswordAsync"
+                           Disabled="@_changingPassword">
+                    @if (_changingPassword)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" Class="mr-2" />
+                        <span>Đang lưu...</span>
+                    }
+                    else { <span>Đổi mật khẩu</span> }
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_confirmOpen)
+{
+    <div class="pm-profile-modal-backdrop confirm" @onclick="CloseConfirmSave">
+        <div class="pm-confirm-card" @onclick:stopPropagation="true">
+            <div class="pm-confirm-icon">
+                <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Style="font-size:34px;" />
+            </div>
+
+            <MudText Typo="Typo.h6" Class="font-weight-bold">
+                Xác nhận cập nhật hồ sơ?
+            </MudText>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                Các thay đổi của bạn sẽ được lưu vào tài khoản PingMe.
+            </MudText>
+
+            <div class="pm-confirm-actions">
+                <MudButton Variant="Variant.Text"
+                           OnClick="CloseConfirmSave"
+                           Disabled="@_saving">
+                    Quay lại
+                </MudButton>
+
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="SaveAsync"
+                           Disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small"
+                                             Indeterminate="true"
+                                             Color="Color.Inherit"
+                                             Class="mr-2" />
+                        <span>Đang lưu...</span>
+                    }
+                    else
+                    {
+                        <span>Xác nhận lưu</span>
+                    }
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .pm-edit-avatar-button {
+        position: relative;
+        display: inline-flex;
+        cursor: pointer;
+        border-radius: 999px;
+    }
+
+        .pm-edit-avatar-button:hover .pm-edit-avatar {
+            filter: brightness(.85);
+        }
+
+    .pm-edit-avatar-camera {
+        position: absolute;
+        right: 2px;
+        bottom: 2px;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .88);
+        color: white;
+        border: 2px solid var(--mud-palette-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pm-profile-page-title {
+        max-width: 860px;
+        margin: 0 auto 24px;
+    }
+
+    .pm-profile-avatar-button {
+        position: relative;
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        border-radius: 999px;
+        cursor: pointer;
+    }
+
+        .pm-profile-avatar-button:hover .pm-profile-avatar {
+            filter: brightness(.88);
+        }
+
+    .pm-profile-avatar-camera {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .86);
+        color: white;
+        border: 2px solid var(--mud-palette-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pm-page-title {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 900;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-page-subtitle {
+        margin: 4px 0 0;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-profile-view-card {
+        max-width: 860px;
+        margin: 0 auto;
+        overflow: hidden;
+        border-radius: 22px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: 0 18px 50px rgba(0,0,0,.22);
+    }
+
+    .pm-profile-cover {
+        height: 160px;
+        position: relative;
+        background: linear-gradient(135deg,#1D4ED8,#60A5FA,#38BDF8);
+    }
+
+    .pm-profile-edit-float {
+        position: absolute;
+        right: 18px;
+        bottom: 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        border: 1px solid rgba(255,255,255,.24);
+        border-radius: 999px;
+        padding: 0 14px;
+        background: rgba(15,23,42,.72);
+        color: white;
+        font-weight: 800;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+        z-index: 10;
+    }
+
+        .pm-profile-edit-float:hover {
+            background: rgba(15,23,42,.9);
+        }
+
+    .pm-profile-view-body {
+        padding: 0 28px 28px;
+    }
+
+    .pm-profile-view-top {
+        display: grid;
+        grid-template-columns: 132px minmax(0, 1fr);
+        align-items: end;
+        gap: 18px;
+        margin-top: -68px;
+        position: relative;
+        z-index: 2;
+    }
+
+    .pm-profile-avatar-wrap {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 3;
+    }
+
+    .pm-profile-avatar {
+        width: 118px !important;
+        height: 118px !important;
+        font-size: 44px !important;
+        border: 6px solid var(--mud-palette-surface);
+        background: #2563EB;
+        color: white;
+        box-shadow: 0 14px 34px rgba(0,0,0,.32);
+        cursor: pointer;
+    }
+
+    .pm-profile-title-block {
+        min-width: 0;
+        padding-bottom: 14px;
+        padding-left: 4px;
+        position: relative;
+        z-index: 2;
+    }
+
+    .pm-profile-name {
+        font-size: 1.55rem;
+        font-weight: 900;
+        color: var(--mud-palette-text-primary);
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pm-profile-email {
+        color: var(--mud-palette-text-secondary);
+        font-size: .92rem;
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .pm-profile-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+        .pm-profile-chips span {
+            padding: 6px 11px;
+            border-radius: 999px;
+            background: rgba(59,130,246,.14);
+            color: var(--mud-palette-primary);
+            font-size: .78rem;
+            font-weight: 800;
+        }
+
+    .pm-profile-info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .pm-profile-info-item {
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid var(--mud-palette-divider);
+        background: rgba(148,163,184,.06);
+    }
+
+        .pm-profile-info-item .label,
+        .pm-profile-bio .label {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .pm-profile-info-item .value {
+            color: var(--mud-palette-text-primary);
+            font-weight: 800;
+            word-break: break-word;
+        }
+
+    .pm-status-online {
+        color: #22C55E;
+        font-weight: 900;
+    }
+
+    .pm-profile-bio {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid var(--mud-palette-divider);
+        background: rgba(148,163,184,.06);
+    }
+
+        .pm-profile-bio p {
+            margin: 8px 0 0;
+            color: var(--mud-palette-text-primary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+    .pm-profile-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 260000;
+        background: rgba(2,6,23,.58);
+        backdrop-filter: blur(5px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 82px 18px 18px 18px;
+    }
+
+        .pm-profile-modal-backdrop.confirm {
+            z-index: 270000;
+        }
+
+    .pm-profile-modal-card {
+        width: min(760px, 100%);
+        max-height: calc(100vh - 42px);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 20px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.48);
+    }
+
+    .pm-profile-modal-header {
+        padding: 18px 22px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        flex-shrink: 0;
+    }
+
+    .pm-profile-modal-close {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mud-palette-text-secondary);
+        font-size: 30px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+        .pm-profile-modal-close:hover {
+            background: rgba(148,163,184,.16);
+            color: var(--mud-palette-text-primary);
+        }
+
+    .pm-profile-modal-body {
+        padding: 8px 22px 18px;
+        overflow: auto;
+    }
+
+    .pm-profile-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 22px 20px;
+        border-top: 1px solid var(--mud-palette-divider);
+        flex-shrink: 0;
+    }
+
+    .pm-edit-avatar-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 16px;
+        margin-bottom: 16px;
+        background: rgba(148,163,184,.06);
+    }
+
+    .pm-edit-avatar {
+        width: 72px !important;
+        height: 72px !important;
+        font-size: 30px !important;
+        background: #2563EB;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .pm-avatar-upload-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(59,130,246,.14);
+        color: var(--mud-palette-primary);
+        font-weight: 900;
+        cursor: pointer;
+        border: 1px solid rgba(59,130,246,.24);
+    }
+
+        .pm-avatar-upload-btn:hover {
+            background: rgba(59,130,246,.22);
+        }
+
+    .pm-avatar-selected {
+        margin-top: 6px;
+        color: var(--mud-palette-text-secondary);
+        font-size: 12px;
+    }
+
+    .pm-edit-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 16px;
+    }
+
+    .pm-native-date-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+        .pm-native-date-field label {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--mud-palette-text-secondary);
+            margin-left: 4px;
+        }
+
+    .pm-native-date-input {
+        width: 100%;
+        height: 56px;
+        border-radius: 4px;
+        border: 1px solid var(--mud-palette-lines-inputs);
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        padding: 0 14px;
+        font-size: 15px;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+        .pm-native-date-input:focus {
+            border-color: var(--mud-palette-primary);
+            box-shadow: 0 0 0 2px rgba(59,130,246,.18);
+        }
+
+    .pm-confirm-card {
+        width: min(420px, 100%);
+        border-radius: 20px;
+        padding: 24px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        box-shadow: 0 24px 80px rgba(0,0,0,.48);
+        text-align: center;
+    }
+
+    .pm-confirm-icon {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 14px;
+        border-radius: 999px;
+        background: rgba(59,130,246,.14);
+        color: var(--mud-palette-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pm-confirm-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 22px;
+    }
+
+    @@media (max-width: 720px) {
+        .pm-profile-view-top {
+            grid-template-columns: 1fr;
+            margin-top: -58px;
+            gap: 10px;
+        }
+
+        .pm-profile-title-block {
+            padding-bottom: 0;
+            padding-left: 0;
+        }
+
+        .pm-profile-info-grid,
+        .pm-edit-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .pm-profile-edit-float span {
+            display: none;
+        }
+    }
+
+    .pm-profile-security-section {
+        padding: 4px 0 8px;
+    }
+
+    .pm-profile-security-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 16px;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-profile-security-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 16px;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 10px;
+        background: var(--mud-palette-background-grey);
+    }
+
+    .pm-profile-security-title {
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .pm-profile-security-desc {
+        font-size: 12px;
+        color: var(--mud-palette-text-secondary);
+        margin-top: 2px;
+    }
+</style>
+
+@code {
+    private UserProfileResponse? _profile;
+    private MudForm? _form;
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _editOpen;
+    private bool _confirmOpen;
+    private bool _changePasswordOpen;
+    private bool _changingPassword;
+    private MudForm? _changePwForm;
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _confirmNewPassword = "";
+    private bool _showCurrentPw;
+    private bool _showNewPw;
+    private bool _showConfirmPw;
+
+    private UpdateProfileRequest _edit = new();
+    private string _dateOfBirthText = string.Empty;
+
+    private IBrowserFile? _selectedAvatarFile;
+    private string? _selectedAvatarFileName;
+    private string? _avatarPreviewUrl;
+    private long _avatarVersion = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _profile = await UserService.GetProfileAsync();
+
+            if (_profile == null)
+                Snackbar.Add("Không tải được hồ sơ. Vui lòng đăng nhập lại.", Severity.Error);
+        }
+        catch
+        {
+            Snackbar.Add("Lỗi khi tải hồ sơ.", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenEditProfile()
+    {
+        if (_profile == null)
+            return;
+
+        _edit = new UpdateProfileRequest
+        {
+            DisplayName = _profile.DisplayName,
+            Bio = _profile.Bio,
+            JobTitle = _profile.JobTitle,
+            Department = _profile.Department,
+            WorkLocation = _profile.WorkLocation,
+            PhoneNumber = _profile.PhoneNumber,
+            DateOfBirth = _profile.DateOfBirth
+        };
+
+        _dateOfBirthText = _profile.DateOfBirth.HasValue
+            ? _profile.DateOfBirth.Value.ToString("yyyy-MM-dd")
+            : string.Empty;
+
+        _selectedAvatarFile = null;
+        _selectedAvatarFileName = null;
+        _avatarPreviewUrl = null;
+
+        _editOpen = true;
+    }
+
+    private void CloseEditProfile()
+    {
+        if (_saving)
+            return;
+
+        _editOpen = false;
+        _confirmOpen = false;
+        _selectedAvatarFile = null;
+        _selectedAvatarFileName = null;
+        _avatarPreviewUrl = null;
+    }
+    private void OpenChangePassword()
+    {
+        _currentPassword = "";
+        _newPassword = "";
+        _confirmNewPassword = "";
+        _showCurrentPw = _showNewPw = _showConfirmPw = false;
+        _changePasswordOpen = true;
+    }
+
+    private void CloseChangePassword()
+    {
+        if (_changingPassword) return;
+        _changePasswordOpen = false;
+    }
+
+    private string? ValidateNewPasswordsMatch(string value)
+        => value != _newPassword ? "Mật khẩu không khớp" : null;
+
+    private async Task ChangePasswordAsync()
+    {
+        if (_changePwForm == null) return;
+        await _changePwForm.Validate();
+        if (!_changePwForm.IsValid) return;
+
+        if (_newPassword.Length < 6)
+        {
+            Snackbar.Add("Mật khẩu mới phải có tối thiểu 6 ký tự.", Severity.Error);
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            var (success, message) = await AuthService.ChangePasswordAsync(_currentPassword, _newPassword);
+            if (success)
+            {
+                Snackbar.Add("Đổi mật khẩu thành công!", Severity.Success);
+                _changePasswordOpen = false;
+            }
+            else
+            {
+                Snackbar.Add(message ?? "Đổi mật khẩu thất bại.", Severity.Error);
+            }
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
+
+    private async Task OpenConfirmSaveAsync()
+    {
+        if (_form == null)
+            return;
+
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        _confirmOpen = true;
+    }
+
+    private void CloseConfirmSave()
+    {
+        if (_saving)
+            return;
+
+        _confirmOpen = false;
+    }
+
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file == null)
+            return;
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Vui lòng chọn file ảnh.", Severity.Warning);
+            return;
+        }
+
+        const long maxFileSize = 3 * 1024 * 1024;
+
+        if (file.Size > maxFileSize)
+        {
+            Snackbar.Add("Ảnh đại diện tối đa 3MB.", Severity.Warning);
+            return;
+        }
+
+        _selectedAvatarFile = file;
+        _selectedAvatarFileName = file.Name;
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxFileSize);
+            using var memoryStream = new MemoryStream();
+
+            await stream.CopyToAsync(memoryStream);
+
+            var base64 = Convert.ToBase64String(memoryStream.ToArray());
+            _avatarPreviewUrl = $"data:{file.ContentType};base64,{base64}";
+
+            StateHasChanged();
+        }
+        catch
+        {
+            _avatarPreviewUrl = null;
+            Snackbar.Add("Không đọc được file ảnh.", Severity.Error);
+        }
+    }
+    private void OnDateOfBirthChanged(ChangeEventArgs e)
+    {
+        _dateOfBirthText = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_profile == null || _saving)
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var parsedDateOfBirth = ParseDateOfBirth(_dateOfBirthText);
+
+            if (_selectedAvatarFile != null)
+            {
+                var avatarOk = await UserService.UploadAvatarAsync(_selectedAvatarFile);
+
+                if (!avatarOk)
+                {
+                    Snackbar.Add(
+                        UserService.LastAvatarUploadError ?? "Upload ảnh đại diện thất bại.",
+                        Severity.Error
+                    );
+                    return;
+                }
+            }
+
+            var ok = await UserService.UpdateProfileAsync(new UpdateProfileRequest
+            {
+                DisplayName = _edit.DisplayName?.Trim(),
+                Bio = _edit.Bio?.Trim(),
+                JobTitle = _edit.JobTitle?.Trim(),
+                Department = _edit.Department?.Trim(),
+                WorkLocation = _edit.WorkLocation?.Trim(),
+                PhoneNumber = _edit.PhoneNumber?.Trim(),
+                DateOfBirth = parsedDateOfBirth
+            });
+
+            if (ok)
+            {
+                Snackbar.Add("Đã cập nhật hồ sơ.", Severity.Success);
+
+                _confirmOpen = false;
+                _editOpen = false;
+                _selectedAvatarFile = null;
+                _selectedAvatarFileName = null;
+
+                _profile = await UserService.GetProfileAsync();
+            }
+            else
+            {
+                Snackbar.Add("Cập nhật hồ sơ thất bại.", Severity.Error);
+            }
+        }
+        catch
+        {
+            Snackbar.Add("Lỗi khi cập nhật hồ sơ.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string? GetAvatarUrl()
+    {
+        if (!string.IsNullOrWhiteSpace(_avatarPreviewUrl))
+            return _avatarPreviewUrl;
+
+        if (string.IsNullOrWhiteSpace(_profile?.AvatarUrl))
+            return null;
+
+        var url = _profile.AvatarUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? _profile.AvatarUrl
+            : $"http://localhost:5000{_profile.AvatarUrl}";
+
+        var separator = url.Contains('?') ? "&" : "?";
+
+        return $"{url}{separator}v={_avatarVersion}";
+    }
+    private static DateTime? ParseDateOfBirth(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return DateTime.TryParse(value, out var date)
+            ? date
+            : null;
+    }
+
+    private static string FormatDateOfBirth(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("dd/MM/yyyy")
+            : "Chưa cập nhật";
+    }
+
+    private static string DisplayValue(string? value, string fallback = "Chưa cập nhật")
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+}

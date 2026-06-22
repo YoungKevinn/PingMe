@@ -1,0 +1,230 @@
+@using PingMe.Frontend.Models
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@inject GroupService GroupService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<div class="pm-dialog-panel" style="border-radius: 12px; background: var(--mud-palette-surface); box-shadow: 0 8px 32px rgba(0,0,0,0.12);">
+    <div class="pm-dialog-title" style="border-bottom: 1px solid var(--mud-palette-divider);">
+        <MudText Typo="Typo.h6" Style="font-weight: 700;">Đổi tên & ảnh nhóm</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Small"
+                       ButtonType="ButtonType.Button"
+                       OnClick="CloseAsync"
+                       AriaLabel="Đóng" />
+    </div>
+
+    <div class="pm-dialog-body" style="padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+        
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+            <MudAvatar Style="width: 100px; height: 100px; font-size: 3rem;" Color="Color.Primary">
+                @if (!string.IsNullOrEmpty(_previewUrl))
+                {
+                    <MudImage Src="@_previewUrl" ObjectFit="ObjectFit.Cover" Style="width: 100%; height: 100%; border-radius: 50%;" />
+                }
+                else
+                {
+                    @(_name.FirstOrDefault().ToString().ToUpper())
+                }
+            </MudAvatar>
+            
+            <MudFileUpload T="IBrowserFile" Accept="image/*" OnFilesChanged="OnAvatarSelected" MaximumFileCount="1">
+                <ButtonTemplate>
+                    <MudButton HtmlTag="label"
+                               Variant="Variant.Outlined" 
+                               Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.CloudUpload"
+                               for="@context.Id">
+                        Tải ảnh lên
+                    </MudButton>
+                </ButtonTemplate>
+            </MudFileUpload>
+            
+            @if (_avatarFile is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @_avatarFile.Name
+                </MudText>
+            }
+        </div>
+
+        <MudTextField @bind-Value="_name"
+                      Label="Tên nhóm"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      MaxLength="100"
+                      Immediate="true"
+                      FullWidth="true" />
+    </div>
+
+    <div class="pm-dialog-actions" style="border-top: 1px solid var(--mud-palette-divider); padding: 16px 24px;">
+        <MudButton Variant="Variant.Text" ButtonType="ButtonType.Button" OnClick="CloseAsync">Hủy</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   ButtonType="ButtonType.Button"
+                   Disabled="@(_saving || string.IsNullOrWhiteSpace(_name))"
+                   OnClick="SaveAsync"
+                   Style="margin-left: 12px; font-weight: 600;">
+            @if (_saving)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">Đang lưu...</span>
+            }
+            else
+            {
+                <span>Lưu thay đổi</span>
+            }
+        </MudButton>
+    </div>
+</div>
+
+<style>
+    .pm-dialog-panel {
+        display: flex;
+        flex-direction: column;
+        max-height: min(90vh, 720px);
+    }
+
+    .pm-dialog-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 16px 24px;
+    }
+
+    .pm-dialog-body {
+        overflow: auto;
+    }
+
+    .pm-dialog-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+</style>
+
+@code {
+    private const long MaxAvatarSize = 5 * 1024 * 1024;
+    private static readonly string[] AllowedAvatarExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+
+    [Parameter] public int GroupId { get; set; }
+    [Parameter] public string? GroupName { get; set; }
+    [Parameter] public string? GroupAvatarUrl { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<EditGroupResult> OnSaved { get; set; }
+
+    private string _name = string.Empty;
+    private IBrowserFile? _avatarFile;
+    private bool _saving;
+    private string? _previewUrl;
+
+    protected override void OnInitialized()
+    {
+        _name = GroupName ?? string.Empty;
+        _previewUrl = GroupAvatarUrl;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name))
+            return;
+
+        _saving = true;
+
+        try
+        {
+            var name = _name.Trim();
+            var renamed = !string.Equals(name, GroupName?.Trim(), StringComparison.Ordinal);
+            string? avatarUrl = null;
+
+            if (renamed)
+            {
+                var ok = await GroupService.UpdateGroupAsync(GroupId, new UpdateGroupRequest
+                {
+                    Name = name
+                });
+
+                if (!ok)
+                {
+                    Snackbar.Add(GroupService.LastError ?? "Không thể đổi tên nhóm. Bạn có thể thiếu quyền.", Severity.Warning);
+                    return;
+                }
+            }
+
+            if (_avatarFile is not null)
+            {
+                var uploadedUrl = await GroupService.UploadGroupAvatarAsync(GroupId, _avatarFile);
+
+                if (string.IsNullOrWhiteSpace(uploadedUrl))
+                {
+                    Snackbar.Add(GroupService.LastError ?? "Không thể đổi ảnh nhóm. Kiểm tra định dạng, dung lượng hoặc quyền của bạn.", Severity.Warning);
+                    return;
+                }
+
+                avatarUrl = uploadedUrl;
+            }
+
+            Snackbar.Add("Đã cập nhật nhóm.", Severity.Success);
+            await OnSaved.InvokeAsync(new EditGroupResult
+            {
+                Name = name,
+                AvatarUrl = avatarUrl
+            });
+            await OnClose.InvokeAsync();
+        }
+        catch
+        {
+            Snackbar.Add("Không thể cập nhật nhóm. Vui lòng thử lại.", Severity.Warning);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file is null)
+            return;
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Chỉ hỗ trợ file ảnh.", Severity.Warning);
+            return;
+        }
+
+        if (file.Size > MaxAvatarSize)
+        {
+            Snackbar.Add("Ảnh nhóm tối đa 5MB.", Severity.Warning);
+            return;
+        }
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (!AllowedAvatarExtensions.Contains(extension))
+        {
+            Snackbar.Add("Chỉ hỗ trợ ảnh JPG, PNG, WebP hoặc GIF.", Severity.Warning);
+            return;
+        }
+
+        _avatarFile = file;
+
+        // Tự tạo URL xem trước ảnh
+        try
+        {
+            var buffer = new byte[file.Size];
+            await file.OpenReadStream(MaxAvatarSize).ReadAsync(buffer);
+            var base64 = Convert.ToBase64String(buffer);
+            _previewUrl = $"data:{file.ContentType};base64,{base64}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading file for preview: {ex.Message}");
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}
