@@ -621,6 +621,7 @@ public class MessageService : IMessageService
             .ToListAsync();
 
         messages.Reverse();
+        await EnrichWithPollDataAsync(messages, userId);
         return messages;
     }
 
@@ -713,6 +714,7 @@ public class MessageService : IMessageService
             .ToListAsync();
 
         messages.Reverse();
+        await EnrichWithPollDataAsync(messages, userId);
         return messages;
     }
 
@@ -996,7 +998,7 @@ public class MessageService : IMessageService
 
         return (true, null);
     }
-    private async Task<MessageResponse> BuildMessageResponseAsync(int messageId)
+    private async Task<MessageResponse> BuildMessageResponseAsync(int messageId, int? currentUserId = null)
     {
         var m = await _db.Messages
             .Include(m => m.Sender)
@@ -1006,7 +1008,104 @@ public class MessageService : IMessageService
             .Include(m => m.ReplyToMessage).ThenInclude(r => r!.Sender)
             .FirstAsync(m => m.Id == messageId);
 
-        return MapToResponse(m);
+        var response = MapToResponse(m);
+
+        if (m.MessageType == MessageType.Poll && currentUserId.HasValue)
+        {
+            response.Poll = await BuildPollResponseForMessageAsync(m.Id, currentUserId.Value);
+        }
+
+        return response;
+    }
+
+    private async Task<DTOs.Poll.PollResponse?> BuildPollResponseForMessageAsync(int messageId, int currentUserId)
+    {
+        var poll = await _db.Polls
+            .AsNoTracking()
+            .Include(p => p.Options)
+                .ThenInclude(o => o.Votes)
+            .FirstOrDefaultAsync(p => p.MessageId == messageId);
+
+        if (poll is null) return null;
+
+        var totalVotes = poll.Options.SelectMany(o => o.Votes).Select(v => v.UserId).Distinct().Count();
+        var myVoteOptionIds = poll.Options
+            .Where(o => o.Votes.Any(v => v.UserId == currentUserId))
+            .Select(o => o.Id)
+            .ToList();
+
+        return new DTOs.Poll.PollResponse
+        {
+            Id = poll.Id,
+            MessageId = poll.MessageId,
+            Question = (await _db.Messages.AsNoTracking().Select(m => new { m.Id, m.Content }).FirstOrDefaultAsync(m => m.Id == messageId))?.Content ?? string.Empty,
+            AllowMultiple = poll.AllowMultiple,
+            EndsAt = poll.EndsAt,
+            TotalVotes = totalVotes,
+            MyVoteOptionIds = myVoteOptionIds,
+            Options = poll.Options
+                .OrderBy(o => o.Order)
+                .Select(o => new DTOs.Poll.PollOptionResponse
+                {
+                    Id = o.Id,
+                    Text = o.Text,
+                    Order = o.Order,
+                    VoteCount = o.Votes.Count,
+                    Percentage = totalVotes > 0 ? Math.Round(o.Votes.Count * 100.0 / totalVotes, 1) : 0,
+                    VoterIds = o.Votes.Select(v => v.UserId).ToList(),
+                })
+                .ToList(),
+        };
+    }
+
+    private async Task EnrichWithPollDataAsync(List<MessageResponse> messages, int userId)
+    {
+        var pollMessageIds = messages
+            .Where(m => string.Equals(m.MessageType, "Poll", StringComparison.OrdinalIgnoreCase))
+            .Select(m => m.Id)
+            .ToList();
+
+        if (pollMessageIds.Count == 0) return;
+
+        var polls = await _db.Polls
+            .AsNoTracking()
+            .Include(p => p.Options)
+                .ThenInclude(o => o.Votes)
+            .Where(p => pollMessageIds.Contains(p.MessageId))
+            .ToListAsync();
+
+        foreach (var msg in messages)
+        {
+            var poll = polls.FirstOrDefault(p => p.MessageId == msg.Id);
+            if (poll is null) continue;
+
+            var totalVotes = poll.Options.SelectMany(o => o.Votes).Select(v => v.UserId).Distinct().Count();
+            msg.Poll = new DTOs.Poll.PollResponse
+            {
+                Id = poll.Id,
+                MessageId = poll.MessageId,
+                Question = msg.Content ?? string.Empty,
+                AllowMultiple = poll.AllowMultiple,
+                EndsAt = poll.EndsAt,
+                TotalVotes = totalVotes,
+                MyVoteOptionIds = poll.Options
+                    .Where(o => o.Votes.Any(v => v.UserId == userId))
+                    .Select(o => o.Id)
+                    .ToList(),
+                Options = poll.Options
+                    .OrderBy(o => o.Order)
+                    .Select(o => new DTOs.Poll.PollOptionResponse
+                    {
+                        Id = o.Id,
+                        Text = o.Text,
+                        Order = o.Order,
+                        VoteCount = o.Votes.Count,
+                        Percentage = totalVotes > 0 ? Math.Round(o.Votes.Count * 100.0 / totalVotes, 1) : 0,
+                        VoterIds = o.Votes.Select(v => v.UserId).ToList(),
+                    })
+                    .ToList(),
+            };
+        }
     }
 
     private static string BuildVulnMessagePayload(PentestFindingDetailDto finding)

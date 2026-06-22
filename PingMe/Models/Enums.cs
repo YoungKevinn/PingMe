@@ -21,7 +21,8 @@ public enum MessageType
     Vulnerability, // pentest finding card
     Reminder, // chat reminder card
     Task,     // group task card
-    Call      // audio/video call log
+    Call,     // audio/video call log
+    Poll      // poll/vote card
 }
 
 public enum BackgroundType

@@ -1,3 +1,5 @@
+using PingMe.DTOs.Poll;
+
 namespace PingMe.DTOs.Message;
 
 public class SendMessageRequest
@@ -38,6 +40,7 @@ public class MessageResponse
     public List<AttachmentResponse> Attachments { get; set; } = [];
     public List<ReactionSummary> Reactions { get; set; } = [];
     public List<int> ReadByUserIds { get; set; } = [];
+    public PollResponse? Poll { get; set; }
 }
 
 public class AttachmentResponse

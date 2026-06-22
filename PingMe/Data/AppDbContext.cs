@@ -36,6 +36,9 @@ public class AppDbContext : DbContext
     public DbSet<Friendship> Friendships => Set<Friendship>();
     public DbSet<OneTimeSecret> OneTimeSecrets => Set<OneTimeSecret>();
     public DbSet<PasswordResetOtp> PasswordResetOtps => Set<PasswordResetOtp>();
+    public DbSet<Poll> Polls => Set<Poll>();
+    public DbSet<PollOption> PollOptions => Set<PollOption>();
+    public DbSet<PollVote> PollVotes => Set<PollVote>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -708,6 +711,47 @@ public class AppDbContext : DbContext
             e.Property(x => x.OtpCode).IsRequired().HasMaxLength(6);
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.OtpCode);
+        });
+
+        // ─────────────────────────────────────────────────
+        // POLL
+        // ─────────────────────────────────────────────────
+        b.Entity<Poll>(e =>
+        {
+            e.HasIndex(p => p.MessageId).IsUnique();
+            e.Property(p => p.AllowMultiple).HasDefaultValue(false);
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW(6)");
+
+            e.HasOne(p => p.Message)
+             .WithOne(m => m.Poll)
+             .HasForeignKey<Poll>(p => p.MessageId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PollOption>(e =>
+        {
+            e.HasIndex(o => new { o.PollId, o.Order });
+
+            e.HasOne(o => o.Poll)
+             .WithMany(p => p.Options)
+             .HasForeignKey(o => o.PollId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PollVote>(e =>
+        {
+            e.HasIndex(v => new { v.PollOptionId, v.UserId }).IsUnique();
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW(6)");
+
+            e.HasOne(v => v.PollOption)
+             .WithMany(o => o.Votes)
+             .HasForeignKey(v => v.PollOptionId)
+             .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(v => v.User)
+             .WithMany()
+             .HasForeignKey(v => v.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

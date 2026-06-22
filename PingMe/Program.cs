@@ -115,6 +115,7 @@ builder.Services.AddScoped<IReminderService, ReminderService>();
 builder.Services.AddScoped<IGroupTaskService, GroupTaskService>();
 builder.Services.AddScoped<IOneTimeSecretService, OneTimeSecretService>();
 builder.Services.AddScoped<TimelineService>();
+builder.Services.AddScoped<IPollService, PollService>();
 builder.Services.AddSingleton<ISignalRConnectionTracker, SignalRConnectionTracker>();
 builder.Services.AddHostedService<MessageExpiryJob>();
 builder.Services.AddHostedService<ReminderDispatchJob>();

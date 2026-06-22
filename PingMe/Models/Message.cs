@@ -71,4 +71,5 @@ public class Message
     public ICollection<SavedMessage> SavedMessages { get; set; } = [];
     public ICollection<MessageReadReceipt> ReadReceipts { get; set; } = [];
     public ICollection<CodeSnippet> CodeSnippets { get; set; } = [];
+    public Poll? Poll { get; set; }
 }

@@ -17,6 +17,7 @@
 @inject GroupService GroupService
 @inject IDialogService DialogService
 @inject LocalizationService Loc
+@inject PollService PollService
 @implements IDisposable
 
 <div style="height:100%; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:2px; background:var(--mud-palette-background);"
@@ -212,7 +213,11 @@
                                     </div>
                                 }
 
-                                @if (IsReminderMessage(msg))
+                                @if (IsPollMessage(msg))
+                                {
+                                    @RenderPollCard(msg)
+                                }
+                                else if (IsReminderMessage(msg))
                                 {
                                     @RenderReminderCard(msg)
                                 }
@@ -1491,6 +1496,7 @@
         Hub.OnMessageReactionUpdated += HandleReaction;
         Hub.OnMessageRead += HandleRead;
         Hub.OnMessagePinned += HandlePinned;
+        Hub.OnPollVoteUpdated += HandlePollVoteUpdated;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -2711,6 +2717,7 @@
         Hub.OnMessageReactionUpdated -= HandleReaction;
         Hub.OnMessageRead -= HandleRead;
         Hub.OnMessagePinned -= HandlePinned;
+        Hub.OnPollVoteUpdated -= HandlePollVoteUpdated;
         Loc.OnLanguageChanged -= HandleLanguageChanged;
     }
 
@@ -2769,6 +2776,149 @@
                 await OnPinChanged.InvokeAsync(data);
         });
     }
+
+    private void HandlePollVoteUpdated(PollVoteUpdatedEvent data)
+    {
+        if (data?.Poll == null) return;
+
+        bool belongs =
+            (GroupId.HasValue && data.GroupId == GroupId) ||
+            (PeerId.HasValue && !data.GroupId.HasValue &&
+                ((data.SenderId == CurrentUserId && data.ReceiverId == PeerId) ||
+                 (data.SenderId == PeerId && data.ReceiverId == CurrentUserId)));
+
+        if (!belongs) return;
+
+        InvokeAsync(() =>
+        {
+            var msg = messages.FirstOrDefault(m => m.Id == data.MessageId);
+            if (msg != null)
+            {
+                msg.Poll = data.Poll;
+                StateHasChanged();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    private async Task VoteOnPollAsync(int pollId, int optionId, bool allowMultiple, List<int> myVotes)
+    {
+        List<int> newVotes;
+        if (allowMultiple)
+        {
+            newVotes = myVotes.Contains(optionId)
+                ? myVotes.Where(id => id != optionId).ToList()
+                : myVotes.Concat([optionId]).ToList();
+        }
+        else
+        {
+            newVotes = myVotes.Contains(optionId) ? [] : [optionId];
+        }
+
+        if (newVotes.Count == 0)
+            await PollService.UnvoteAsync(pollId);
+        else
+            await PollService.VoteAsync(pollId, newVotes);
+    }
+
+    private static bool IsPollMessage(MessageResponse msg) =>
+        string.Equals(msg.MessageType, "Poll", StringComparison.OrdinalIgnoreCase);
+
+    private RenderFragment RenderPollCard(MessageResponse msg) => builder =>
+    {
+        var poll = msg.Poll;
+        var isOwn = msg.SenderId == CurrentUserId;
+        var isEnded = poll?.EndsAt.HasValue == true && poll.EndsAt!.Value < DateTime.UtcNow;
+        var sequence = 0;
+
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-poll-card");
+
+        // Header
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-poll-header");
+        builder.OpenElement(sequence++, "span");
+        builder.AddAttribute(sequence++, "class", "pm-poll-label");
+        builder.AddContent(sequence++, "📊 Bình chọn");
+        builder.CloseElement();
+        if (isEnded)
+        {
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "pm-poll-ended-badge");
+            builder.AddContent(sequence++, "Đã kết thúc");
+            builder.CloseElement();
+        }
+        if (poll?.AllowMultiple == true)
+        {
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "pm-poll-multi-badge");
+            builder.AddContent(sequence++, "Nhiều đáp án");
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        // Question
+        builder.OpenElement(sequence++, "div");
+        builder.AddAttribute(sequence++, "class", "pm-poll-question");
+        builder.AddContent(sequence++, msg.Content ?? poll?.Question ?? string.Empty);
+        builder.CloseElement();
+
+        if (poll != null)
+        {
+            // Options
+            foreach (var option in poll.Options)
+            {
+                var opt = option;
+                var isVoted = poll.MyVoteOptionIds.Contains(opt.Id);
+                var pct = opt.Percentage;
+
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", $"pm-poll-option {(isVoted ? "voted" : "")} {(isEnded ? "ended" : "")}");
+                builder.AddAttribute(sequence++, "onclick",
+                    EventCallback.Factory.Create(this, () => VoteOnPollAsync(poll.Id, opt.Id, poll.AllowMultiple, poll.MyVoteOptionIds)));
+
+                // Progress bar fill
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", $"pm-poll-bar {(isVoted ? "voted" : "")}");
+                builder.AddAttribute(sequence++, "style", $"width:{pct}%");
+                builder.CloseElement();
+
+                // Option content row
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", "pm-poll-option-row");
+
+                builder.OpenElement(sequence++, "span");
+                builder.AddAttribute(sequence++, "class", $"pm-poll-check {(isVoted ? "visible" : "")}");
+                builder.AddContent(sequence++, isVoted ? "✓" : "");
+                builder.CloseElement();
+
+                builder.OpenElement(sequence++, "span");
+                builder.AddAttribute(sequence++, "class", "pm-poll-option-text");
+                builder.AddContent(sequence++, opt.Text);
+                builder.CloseElement();
+
+                builder.OpenElement(sequence++, "span");
+                builder.AddAttribute(sequence++, "class", "pm-poll-pct");
+                builder.AddContent(sequence++, $"{pct:0}%");
+                builder.CloseElement();
+
+                builder.CloseElement(); // option-row
+                builder.CloseElement(); // option
+            }
+
+            // Footer
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "pm-poll-footer");
+            builder.AddContent(sequence++, $"{poll.TotalVotes} lượt bình chọn");
+            if (poll.EndsAt.HasValue && !isEnded)
+            {
+                builder.AddContent(sequence++, $" • Kết thúc {poll.EndsAt.Value.ToLocalTime():HH:mm dd/MM}");
+            }
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // pm-poll-card
+    };
 
     private async Task ShowEditHistory(int messageId)
     {
@@ -2945,4 +3095,132 @@
         cursor: pointer;
         display: block;
     }
+
+    /* ── Poll card ─────────────────────────────────────── */
+    .pm-poll-card {
+        min-width: min(280px, 72vw);
+        max-width: min(360px, 80vw);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 4px 0 2px;
+    }
+
+    .pm-poll-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .pm-poll-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        opacity: 0.85;
+    }
+
+    .pm-poll-ended-badge {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: rgba(239, 68, 68, 0.18);
+        color: #EF4444;
+    }
+
+    .pm-poll-multi-badge {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: rgba(59, 130, 246, 0.15);
+        color: #3B82F6;
+    }
+
+    .pm-poll-question {
+        font-size: 0.92rem;
+        font-weight: 600;
+        line-height: 1.3;
+        overflow-wrap: break-word;
+    }
+
+    .pm-poll-option {
+        position: relative;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        overflow: hidden;
+        cursor: pointer;
+        transition: border-color 0.15s;
+        user-select: none;
+    }
+
+        .pm-poll-option.voted {
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .pm-poll-option.ended {
+            cursor: default;
+        }
+
+    .pm-poll-bar {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+        background: rgba(148, 163, 184, 0.14);
+        transition: width 0.4s ease;
+        pointer-events: none;
+    }
+
+        .pm-poll-bar.voted {
+            background: rgba(59, 130, 246, 0.18);
+        }
+
+    .pm-poll-option-row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    .pm-poll-check {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #3B82F6;
+        width: 16px;
+        flex-shrink: 0;
+        visibility: hidden;
+    }
+
+        .pm-poll-check.visible {
+            visibility: visible;
+        }
+
+    .pm-poll-option-text {
+        flex: 1;
+        font-size: 0.87rem;
+        font-weight: 500;
+        overflow-wrap: break-word;
+    }
+
+    .pm-poll-pct {
+        font-size: 0.78rem;
+        font-weight: 700;
+        opacity: 0.72;
+        flex-shrink: 0;
+    }
+
+    .pm-poll-footer {
+        font-size: 0.74rem;
+        opacity: 0.6;
+        font-weight: 500;
+    }
+
+    .pm-bubble.own .pm-poll-bar { background: rgba(255,255,255,0.14); }
+    .pm-bubble.own .pm-poll-bar.voted { background: rgba(255,255,255,0.3); }
+    .pm-bubble.own .pm-poll-option { border-color: rgba(255,255,255,0.25); }
+    .pm-bubble.own .pm-poll-option.voted { border-color: rgba(255,255,255,0.7); }
+    .pm-bubble.own .pm-poll-check { color: white; }
+    .pm-bubble.own .pm-poll-multi-badge { background: rgba(255,255,255,0.2); color: white; }
+    .pm-bubble.own .pm-poll-ended-badge { background: rgba(255,255,255,0.15); color: white; }
 </style>

@@ -1031,6 +1031,87 @@ namespace PingMe.Migrations
                     b.ToTable("PinnedConversations");
                 });
 
+            modelBuilder.Entity("PingMe.Models.Poll", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<bool>("AllowMultiple")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasDefaultValueSql("NOW(6)");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("MessageId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique();
+
+                    b.ToTable("Polls");
+                });
+
+            modelBuilder.Entity("PingMe.Models.PollOption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PollId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PollId", "Order");
+
+                    b.ToTable("PollOptions");
+                });
+
+            modelBuilder.Entity("PingMe.Models.PollVote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasDefaultValueSql("NOW(6)");
+
+                    b.Property<int>("PollOptionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PollOptionId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PollVotes");
+                });
+
             modelBuilder.Entity("PingMe.Models.SavedMessage", b =>
                 {
                     b.Property<int>("Id")
@@ -1700,6 +1781,47 @@ namespace PingMe.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PingMe.Models.Poll", b =>
+                {
+                    b.HasOne("PingMe.Models.Message", "Message")
+                        .WithOne("Poll")
+                        .HasForeignKey("PingMe.Models.Poll", "MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("PingMe.Models.PollOption", b =>
+                {
+                    b.HasOne("PingMe.Models.Poll", "Poll")
+                        .WithMany("Options")
+                        .HasForeignKey("PollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Poll");
+                });
+
+            modelBuilder.Entity("PingMe.Models.PollVote", b =>
+                {
+                    b.HasOne("PingMe.Models.PollOption", "PollOption")
+                        .WithMany("Votes")
+                        .HasForeignKey("PollOptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PingMe.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PollOption");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PingMe.Models.SavedMessage", b =>
                 {
                     b.HasOne("PingMe.Models.Message", "Message")
@@ -1795,11 +1917,23 @@ namespace PingMe.Migrations
 
                     b.Navigation("CodeSnippets");
 
+                    b.Navigation("Poll");
+
                     b.Navigation("Reactions");
 
                     b.Navigation("ReadReceipts");
 
                     b.Navigation("SavedMessages");
+                });
+
+            modelBuilder.Entity("PingMe.Models.Poll", b =>
+                {
+                    b.Navigation("Options");
+                });
+
+            modelBuilder.Entity("PingMe.Models.PollOption", b =>
+                {
+                    b.Navigation("Votes");
                 });
 
             modelBuilder.Entity("PingMe.Models.User", b =>

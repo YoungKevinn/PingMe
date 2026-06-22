@@ -51,6 +51,7 @@ builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<FriendService>();
 builder.Services.AddScoped<OneTimeSecretService>();
 builder.Services.AddScoped<TimelineService>();
+builder.Services.AddScoped<PollService>();
 
 // SignalR hub (singleton vì cần dùng across components)
 builder.Services.AddSingleton<ChatHubService>();

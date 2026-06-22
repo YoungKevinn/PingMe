@@ -40,6 +40,7 @@ public class MessageResponse
     public List<AttachmentResponse> Attachments { get; set; } = new();
     public List<ReactionSummary> Reactions { get; set; } = new();
     public List<int> ReadByUserIds { get; set; } = new();
+    public PollResponse? Poll { get; set; }
 
     public bool IsRead => ReadByUserIds.Count > 0;
 

@@ -21,6 +21,7 @@ public class ChatHubService : IAsyncDisposable
     public event Action<GroupMemberKickedEvent>? OnGroupMemberKicked;
     public event Action<TaskAssignedEvent>? OnTaskAssigned;
     public event Func<System.Text.Json.JsonElement, Task>? OnUserMentioned;
+    public event Action<PollVoteUpdatedEvent>? OnPollVoteUpdated;
 
     // WebRTC Events
     public event Action<IncomingCallEvent>? OnIncomingCall;
@@ -144,6 +145,11 @@ public class ChatHubService : IAsyncDisposable
         _hubConnection.On<CallEndedEvent>("CallEnded", data =>
         {
             OnCallEnded?.Invoke(data);
+        });
+
+        _hubConnection.On<PollVoteUpdatedEvent>("PollVoteUpdated", data =>
+        {
+            OnPollVoteUpdated?.Invoke(data);
         });
     }
 

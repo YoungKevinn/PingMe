@@ -7,6 +7,7 @@
 @inject IocNavStateService IocNavState
 @inject ChatHubService Hub
 @inject SnippetService SnippetService
+@inject PollService PollService
 @inject ISnackbar Snackbar
 @inject GroupService GroupService
 @inject IJSRuntime JS
@@ -142,6 +143,14 @@
             <MudIcon Icon="@Icons.Material.Filled.Code" Style="font-size:20px;" />
         </button>
 
+        <button type="button"
+                class="pm-input-icon-btn"
+                title="Tạo bình chọn"
+                @onclick="@OpenPollDialog"
+                disabled="@(_sending || Disabled || _isRecording)">
+            <MudIcon Icon="@Icons.Material.Outlined.HowToVote" Style="font-size:20px;" />
+        </button>
+
         @if (_isRecording)
         {
             <div class="pm-recording-indicator" style="flex:1;display:flex;align-items:center;color:var(--mud-palette-error);font-weight:600;padding-left:10px; transform: translateY(-7px);">
@@ -269,6 +278,90 @@
                     else
                     {
                         <span>Gửi vào chat</span>
+                    }
+                </MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_pollDialogOpen)
+{
+    <div class="pm-modal-backdrop" @onclick="@ClosePollDialog">
+        <div class="pm-modal-card" @onclick:stopPropagation="true" style="max-width:440px;width:96vw;">
+            <div class="pm-modal-header">
+                <div>
+                    <MudText Typo="Typo.h6">📊 Tạo bình chọn</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Mọi người trong cuộc trò chuyện có thể tham gia bình chọn.
+                    </MudText>
+                </div>
+                <button type="button" class="pm-modal-x" @onclick="@ClosePollDialog">✕</button>
+            </div>
+
+            <div class="pm-modal-body" style="display:flex;flex-direction:column;gap:12px;">
+                <MudTextField @bind-Value="_pollQuestion"
+                              Label="Câu hỏi bình chọn"
+                              Placeholder="Hỏi điều gì đó..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              FullWidth="true"
+                              MaxLength="300"
+                              Counter="300"
+                              AutoFocus="true" />
+
+                <MudText Typo="Typo.subtitle2" Style="margin-bottom:-4px;">Các lựa chọn (tối thiểu 2)</MudText>
+                @for (var i = 0; i < _pollOptions.Count; i++)
+                {
+                    var idx = i;
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <MudTextField Value="@_pollOptions[idx]"
+                                      ValueChanged="@((string v) => _pollOptions[idx] = v)"
+                                      Placeholder="@($"Lựa chọn {idx + 1}")"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      FullWidth="true"
+                                      MaxLength="300" />
+                        @if (_pollOptions.Count > 2)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => RemovePollOption(idx))" />
+                        }
+                    </div>
+                }
+
+                @if (_pollOptions.Count < 10)
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.Add"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="@AddPollOption">
+                        Thêm lựa chọn
+                    </MudButton>
+                }
+
+                <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                    <MudCheckBox @bind-Value="_pollAllowMultiple" Label="Cho phép chọn nhiều đáp án" Color="Color.Primary" />
+                </div>
+            </div>
+
+            <div class="pm-modal-actions">
+                <MudButton ButtonType="ButtonType.Button" OnClick="@ClosePollDialog">Huỷ</MudButton>
+                <MudButton ButtonType="ButtonType.Button"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           Disabled="@(!CanSendPoll || _sendingPoll)"
+                           OnClick="@SendPollAsync">
+                    @if (_sendingPoll)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Inherit" />
+                    }
+                    else
+                    {
+                        <span>Tạo bình chọn</span>
                     }
                 </MudButton>
             </div>
@@ -725,6 +818,17 @@ private int CurrentUserId;
     private bool _snippetDialogOpen;
     private bool _snippetLanguageOpen;
 
+    // Poll
+    private bool _pollDialogOpen;
+    private bool _sendingPoll;
+    private string _pollQuestion = "";
+    private List<string> _pollOptions = ["", ""];
+    private bool _pollAllowMultiple;
+
+    private bool CanSendPoll =>
+        !string.IsNullOrWhiteSpace(_pollQuestion) &&
+        _pollOptions.Count(o => !string.IsNullOrWhiteSpace(o)) >= 2;
+
     private bool _slashPopupVisible;
     private string _slashFilter = "";
 
@@ -1115,6 +1219,74 @@ private int CurrentUserId;
         };
 
         StateHasChanged();
+    }
+
+    private void OpenPollDialog()
+    {
+        _pollQuestion = "";
+        _pollOptions = ["", ""];
+        _pollAllowMultiple = false;
+        _pollDialogOpen = true;
+    }
+
+    private void ClosePollDialog()
+    {
+        _pollDialogOpen = false;
+        StateHasChanged();
+    }
+
+    private void AddPollOption()
+    {
+        if (_pollOptions.Count < 10)
+            _pollOptions.Add("");
+    }
+
+    private void RemovePollOption(int index)
+    {
+        if (_pollOptions.Count > 2)
+            _pollOptions.RemoveAt(index);
+    }
+
+    private async Task SendPollAsync()
+    {
+        if (!CanSendPoll || _sendingPoll) return;
+
+        _sendingPoll = true;
+        StateHasChanged();
+
+        try
+        {
+            var validOptions = _pollOptions.Where(o => !string.IsNullOrWhiteSpace(o)).ToList();
+            var request = new CreatePollRequest
+            {
+                ReceiverId = PeerId,
+                GroupId = GroupId,
+                Question = _pollQuestion.Trim(),
+                Options = validOptions,
+                AllowMultiple = _pollAllowMultiple,
+            };
+
+            var result = await PollService.CreatePollAsync(request);
+
+            if (result != null)
+            {
+                ClosePollDialog();
+                await OnSendMessage.InvokeAsync(result);
+            }
+            else
+            {
+                Snackbar.Add("Tạo bình chọn thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _sendingPoll = false;
+            StateHasChanged();
+        }
     }
 
     private void ToggleSnippetLanguageDropdown()
