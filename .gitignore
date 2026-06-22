@@ -6,3 +6,4 @@ obj/
 *.suo
 publish/
 .claude/
+AGENTS.md
