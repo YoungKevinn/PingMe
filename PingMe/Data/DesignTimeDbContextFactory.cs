@@ -8,7 +8,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString = "Server=127.0.0.1;Port=3306;Database=pingme_dev;User=root;Password=123456;CharSet=utf8mb4;AllowPublicKeyRetrieval=True;SslMode=None;";
+        var connectionString = "Server=127.0.0.1;Port=3307;Database=pingme_dev;User=root;Password=root;CharSet=utf8mb4;AllowPublicKeyRetrieval=True;SslMode=None;";
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseMySql(connectionString,

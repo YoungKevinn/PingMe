@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -i \"\\\\.cs$\")",
+      "Bash(dir E:\\\\PingMe\\\\DoAnWeb /b)",
+      "PowerShell(head -20)",
+      "Bash(dotnet build *)"
+    ]
+  }
+}

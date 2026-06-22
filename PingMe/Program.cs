@@ -12,6 +12,7 @@ using PingMe.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+Console.WriteLine("DB STRING = " + connectionString);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString,
         new MySqlServerVersion(new Version(8, 0, 46)),
