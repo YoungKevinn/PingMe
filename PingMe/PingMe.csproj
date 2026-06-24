@@ -41,6 +41,9 @@
 		<!-- Swagger -->
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+
+		<!-- Cookie Auth -->
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.Cookies" Version="2.3.0" />
 	</ItemGroup>
 
 </Project>

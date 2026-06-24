@@ -159,7 +159,7 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync();
 
-        _ = Task.Run(() => _email.SendPasswordResetEmailAsync(user.Email, user.DisplayName, token));
+        await _email.SendPasswordResetEmailAsync(user.Email, user.DisplayName, token);
 
         return (true, null);
     }

@@ -38,6 +38,7 @@ public class GroupMemberResponse
 {
     public int UserId { get; set; }
     public string DisplayName { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
     public bool IsOnline { get; set; }
     public string Role { get; set; } = string.Empty;

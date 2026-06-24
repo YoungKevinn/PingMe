@@ -1,0 +1,82 @@
+@{
+    Layout = "_EmptyLayout";
+    ViewData["Title"] = "Xác minh Email - PingMe";
+    var email = Context.Request.Query["email"].ToString();
+}
+
+<div class="pm-auth-wrapper">
+    <div class="pm-auth-card">
+        <div class="pm-auth-logo">
+            <div class="pm-auth-logo-icon" style="background:linear-gradient(135deg,#16A34A,#22C55E);">
+                <span class="mud-icon-root mud-svg-icon" style="color:white;font-size:32px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                </span>
+            </div>
+            <div class="pm-auth-heading">
+                <p class="pm-auth-title">Xác minh Email</p>
+                <p class="pm-auth-subtitle">Nhập mã OTP đã gửi đến <strong>@email</strong></p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ViewBag.Error as string))
+        {
+            <div class="mud-alert mud-alert-filled mud-alert-filled-error" style="margin-bottom:16px;border-radius:10px;padding:12px 16px;">
+                <div class="mud-alert-message">@ViewBag.Error</div>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(ViewBag.Success as string))
+        {
+            <div class="mud-alert mud-alert-filled mud-alert-filled-success" style="margin-bottom:16px;border-radius:10px;padding:12px 16px;">
+                <div class="mud-alert-message">@ViewBag.Success</div>
+            </div>
+        }
+
+        <form method="post" action="/auth/verify-email">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Email" value="@email" />
+
+            <div style="margin-bottom:24px;">
+                <p style="margin:0 0 10px;font-size:.9rem;font-weight:600;color:var(--mud-palette-text-secondary);letter-spacing:.01em;">Mã OTP (6 chữ số)</p>
+                <input type="text" name="OtpCode" id="otp" required
+                       maxlength="6" pattern="[0-9]{6}" placeholder="· · · · · ·"
+                       style="width:100%;height:64px;font-size:1.875rem;font-weight:700;letter-spacing:.55em;text-align:center;
+                              background:transparent;border:1.5px solid var(--mud-palette-lines-inputs);border-radius:8px;
+                              color:var(--mud-palette-text-primary);outline:none;box-sizing:border-box;padding:0 8px 0 20px;
+                              transition:border-color .2s,box-shadow .2s;font-family:var(--pm-font,'Inter',sans-serif);"
+                       onfocus="this.style.borderColor='var(--mud-palette-primary)';this.style.boxShadow='0 0 0 3px rgba(59,130,246,.18)'"
+                       onblur="this.style.borderColor='var(--mud-palette-lines-inputs)';this.style.boxShadow='none'" />
+                <p style="margin:6px 0 0 2px;font-size:.8125rem;font-weight:400;color:var(--mud-palette-text-secondary);">Kiểm tra hộp thư đến của bạn</p>
+            </div>
+
+            <button type="submit"
+                    class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-full-width mud-ripple"
+                    style="height:46px;font-size:.9375rem;font-weight:600;letter-spacing:.02em;width:100%;border-radius:8px;margin-bottom:10px;">
+                <span class="mud-button-label">Xác minh</span>
+            </button>
+        </form>
+
+        <form method="post" action="/auth/resend-otp">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="Email" value="@email" />
+            <button type="submit"
+                    class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-button-full-width mud-ripple"
+                    style="height:42px;font-size:.875rem;font-weight:600;letter-spacing:.02em;width:100%;border-radius:8px;">
+                <span class="mud-button-label">Gửi lại mã OTP</span>
+            </button>
+        </form>
+
+        <div style="text-align:center;margin-top:18px;">
+            <a href="/auth/login" style="font-size:.8125rem;font-weight:500;color:var(--mud-palette-text-secondary);text-decoration:none;opacity:.8;transition:opacity .15s;"
+               onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.8'">← Quay lại đăng nhập</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('otp')?.focus();
+document.getElementById('otp')?.addEventListener('input', function(e) {
+    e.target.value = e.target.value.replace(/\D/g, '');
+});
+</script>
+}

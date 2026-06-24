@@ -1,5 +1,7 @@
 using System.Text;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -12,7 +14,6 @@ using PingMe.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
-Console.WriteLine("DB STRING = " + connectionString);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySql(connectionString,
         new MySqlServerVersion(new Version(8, 0, 46)),
@@ -22,8 +23,25 @@ var jwtSecret   = builder.Configuration["Jwt:Secret"]!;
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]!;
 var jwtAudience = builder.Configuration["Jwt:Audience"]!;
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+// Cookie + JWT dual-scheme authentication
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+    })
+    .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+    {
+        options.LoginPath  = "/auth/login";
+        options.LogoutPath = "/auth/logout";
+        options.AccessDeniedPath = "/auth/login";
+        options.Cookie.Name     = "pm_auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.ExpireTimeSpan   = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
+    })
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -67,7 +85,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+// MVC with views (keeps API controllers too)
+builder.Services.AddControllersWithViews();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -90,7 +109,7 @@ builder.Services.AddDataProtection();
 builder.Services.Configure<PingMe.Settings.EmailSettings>(
     builder.Configuration.GetSection("EmailSettings"));
 
-// Services
+// Backend Services (unchanged)
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -120,6 +139,13 @@ builder.Services.AddSingleton<ISignalRConnectionTracker, SignalRConnectionTracke
 builder.Services.AddHostedService<MessageExpiryJob>();
 builder.Services.AddHostedService<ReminderDispatchJob>();
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -132,13 +158,25 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseForwardedHeaders();
 app.UseStaticFiles();
+app.UseRouting();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<JwtRevocationMiddleware>();
 app.UseMiddleware<AuditLogMiddleware>();
-app.UseAuthorization();
+
+// MVC routing: specific routes first, then default
+app.MapControllerRoute(
+    name: "auth",
+    pattern: "auth/{action=Login}",
+    defaults: new { controller = "Account" });
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller=Home}/{action=Index}/{id?}");
+
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 

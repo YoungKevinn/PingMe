@@ -1,0 +1,348 @@
+@{
+    ViewData["Title"] = "Hồ sơ người dùng - PingMe";
+    var userId = ViewBag.UserId as int? ?? 0;
+}
+
+<style>
+    .pm-profile-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 64px - 20px);
+        padding: 20px;
+        background: var(--mud-palette-background);
+    }
+
+    .pm-profile-card {
+        width: min(580px, 100%);
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
+    }
+
+    .pm-profile-header {
+        padding: 28px 24px;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .pm-profile-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .pm-profile-avatar-placeholder {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--mud-palette-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        font-weight: 700;
+        color: white;
+        flex-shrink: 0;
+    }
+
+    .pm-profile-info {
+        flex: 1;
+        min-width: 220px;
+    }
+
+    .pm-profile-name {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-profile-username {
+        margin: 4px 0 0;
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-profile-bio {
+        margin: 8px 0 0;
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.5;
+    }
+
+    .pm-profile-actions {
+        padding: 16px 24px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .mud-button-root {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 16px;
+        border-radius: 6px;
+        border: none;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        min-width: 100px;
+    }
+
+    .mud-button-filled-primary {
+        background: var(--mud-palette-primary);
+        color: white;
+    }
+
+    .mud-button-filled-primary:hover:not(:disabled) {
+        background: var(--mud-palette-primary-darken-1);
+    }
+
+    .mud-button-filled-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .mud-button-outlined-primary {
+        border: 2px solid var(--mud-palette-primary);
+        color: var(--mud-palette-primary);
+        background: transparent;
+    }
+
+    .mud-button-outlined-primary:hover {
+        background: rgba(37, 99, 235, 0.08);
+    }
+
+    .mud-button-outlined-warning {
+        border: 2px solid #F59E0B;
+        color: #F59E0B;
+        background: transparent;
+    }
+
+    .mud-button-outlined-warning:hover {
+        background: rgba(245, 158, 11, 0.08);
+    }
+
+    .mud-button-text-primary {
+        color: var(--mud-palette-primary);
+        background: transparent;
+    }
+
+    .mud-button-text-primary:hover {
+        background: rgba(37, 99, 235, 0.08);
+    }
+
+    .mud-button-text-error {
+        color: #EF4444;
+        background: transparent;
+    }
+
+    .mud-button-text-error:hover {
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    .pm-profile-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        color: var(--mud-palette-text-secondary);
+        gap: 12px;
+    }
+
+    .pm-profile-error {
+        padding: 24px;
+        text-align: center;
+    }
+
+    .pm-profile-error-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+
+    .pm-profile-error-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .pm-profile-error-msg {
+        margin: 8px 0 0;
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-profile-error-link {
+        display: block;
+        margin-top: 16px;
+        color: var(--mud-palette-primary);
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .pm-profile-error-link:hover {
+        text-decoration: underline;
+    }
+
+    .mud-progress-circular {
+        width: 36px;
+        height: 36px;
+    }
+</style>
+
+<div class="pm-profile-container">
+    <div class="pm-profile-card">
+        <div id="profile-content">
+            <!-- Loading state -->
+            <div class="pm-profile-loading">
+                <div class="mud-progress-circular mud-progress-circular-indeterminate">
+                    <svg viewBox="22 22 44 44">
+                        <circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle>
+                    </svg>
+                </div>
+                <span>Đang tải hồ sơ...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const userId = @userId;
+
+    async function loadProfile() {
+        const contentDiv = document.getElementById('profile-content');
+
+        try {
+            // Load profile
+            const user = await pmApi.get(`/api/users/${userId}`);
+            if (!user) {
+                showError('Không tìm thấy người dùng.');
+                return;
+            }
+
+            // Load friendship status
+            const [friends, sentReqs, recvReqs] = await Promise.all([
+                pmApi.get('/api/friends') || [],
+                pmApi.get('/api/friends/sent') || [],
+                pmApi.get('/api/friends/requests') || []
+            ]);
+
+            const isFriend = (friends || []).some(f => f.userId === userId || f.id === userId);
+            const sentReq = (sentReqs || []).find(r => r.toUserId === userId);
+            const recvReq = (recvReqs || []).find(r => r.fromUserId === userId);
+
+            // Build HTML
+            const avatarHtml = user.avatarUrl
+                ? `<img src="${pmEscape(user.avatarUrl)}" class="pm-profile-avatar" />`
+                : `<div class="pm-profile-avatar-placeholder">${pmEscape((user.displayName || '?')[0].toUpperCase())}</div>`;
+
+            let actionBtns = '';
+            if (isFriend) {
+                actionBtns = `
+                    <button class="mud-button-root mud-button-filled-primary" disabled>
+                        ✓ Bạn bè
+                    </button>
+                    <button class="mud-button-root mud-button-text-error" onclick="removeFriend(${userId})">
+                        Hủy kết bạn
+                    </button>`;
+            } else if (sentReq) {
+                actionBtns = `
+                    <button class="mud-button-root mud-button-outlined-warning" disabled>
+                        ⌛ Đã gửi lời mời
+                    </button>
+                    <button class="mud-button-root mud-button-text-primary" onclick="cancelRequest(${sentReq.id})">
+                        Hủy yêu cầu
+                    </button>`;
+            } else if (recvReq) {
+                actionBtns = `
+                    <button class="mud-button-root mud-button-filled-primary" onclick="acceptRequest(${recvReq.id})">
+                        ✅ Chấp nhận
+                    </button>
+                    <button class="mud-button-root mud-button-text-error" onclick="declineRequest(${recvReq.id})">
+                        ❌ Từ chối
+                    </button>`;
+            } else {
+                actionBtns = `<button class="mud-button-root mud-button-filled-primary" onclick="sendRequest(${userId})">
+                    ➕ Kết bạn
+                </button>`;
+            }
+
+            contentDiv.innerHTML = `
+                <div class="pm-profile-header">
+                    ${avatarHtml}
+                    <div class="pm-profile-info">
+                        <h5 class="pm-profile-name">${pmEscape(user.displayName || user.username)}</h5>
+                        <div class="pm-profile-username">@@${pmEscape(user.username)}</div>
+                        ${user.bio ? `<p class="pm-profile-bio">${pmEscape(user.bio)}</p>` : ''}
+                    </div>
+                </div>
+                <div class="pm-profile-actions">
+                    ${actionBtns}
+                    <button class="mud-button-root mud-button-text-primary" onclick="wi
+                    ndow.location.href='/chat/${userId}'">
+                        💬 Nhắn tin
+                    </button>
+                </div>
+            `;
+        } catch (e) {
+            console.error('Error loading profile:', e);
+            showError('Không thể tải hồ sơ. Vui lòng thử lại.');
+        }
+    }
+
+    function showError(msg) {
+        document.getElementById('profile-content').innerHTML = `
+            <div class="pm-profile-error">
+                <div class="pm-profile-error-icon">😕</div>
+                <h5 class="pm-profile-error-title">Có lỗi xảy ra</h5>
+                <p class="pm-profile-error-msg">${pmEscape(msg)}</p>
+                <a href="/" class="pm-profile-error-link">← Quay về trang chủ</a>
+            </div>
+        `;
+    }
+
+    async function sendRequest(uid) {
+        const r = await pmApi.post('/api/friends/request', { targetUserId: uid });
+        if (r) { pmToast.success('Đã gửi lời mời kết bạn'); loadProfile(); }
+    }
+
+    async function cancelRequest(reqId) {
+        const r = await pmApi.delete(`/api/friends/cancel/${reqId}`);
+        if (r !== false) { pmToast.success('Đã hủy lời mời'); loadProfile(); }
+    }
+
+    async function acceptRequest(reqId) {
+        const r = await pmApi.post(`/api/friends/accept/${reqId}`, {});
+        if (r) { pmToast.success('Đã chấp nhận kết bạn'); loadProfile(); }
+    }
+
+    async function declineRequest(reqId) {
+        const r = await pmApi.post(`/api/friends/decline/${reqId}`, {});
+        if (r !== false) { pmToast.success('Đã từ chối'); loadProfile(); }
+    }
+
+    async function removeFriend(uid) {
+        if (!confirm('Bỏ bạn bè?')) return;
+        const r = await pmApi.delete(`/api/friends/${uid}`);
+        if (r !== false) { pmToast.success('Đã xóa khỏi danh sách bạn bè'); loadProfile(); }
+    }
+
+    // Load profile on page load
+    document.addEventListener('DOMContentLoaded', () => loadProfile());
+</script>
+}

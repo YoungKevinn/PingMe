@@ -1,0 +1,296 @@
+/* PingMe MVC — supplemental CSS matching _blueTheme from Blazor */
+
+:root,
+body[data-mud-theme="default"],
+body:not([data-mud-theme="dark"]) {
+    --mud-palette-primary: #2563EB;
+    --mud-palette-primary-text: #FFFFFF;
+    --mud-palette-primary-darken: #1D4ED8;
+    --mud-palette-primary-lighten: #60A5FA;
+    --mud-palette-primary-hover: rgba(37, 99, 235, 0.06);
+    --mud-palette-secondary: #38BDF8;
+    --mud-palette-secondary-text: #FFFFFF;
+    --mud-palette-secondary-darken: #0284C7;
+    --mud-palette-secondary-lighten: #7DD3FC;
+    --mud-palette-secondary-hover: rgba(56, 189, 248, 0.06);
+    --mud-palette-appbar-background: #1D4ED8;
+    --mud-palette-appbar-text: #FFFFFF;
+    --mud-palette-background: #F8FAFC;
+    --mud-palette-surface: #FFFFFF;
+    --mud-palette-drawer-background: #FFFFFF;
+    --mud-palette-drawer-text: #1E293B;
+    --mud-palette-drawer-icon: #616161;
+    --mud-palette-action-default: #475569;
+    --mud-palette-action-disabled: rgba(15,23,42,0.26);
+    --mud-palette-action-disabled-background: rgba(15,23,42,0.12);
+    --mud-palette-action-hover: rgba(15,23,42,0.04);
+    --mud-palette-text-primary: #0F172A;
+    --mud-palette-text-secondary: #475569;
+    --mud-palette-text-disabled: rgba(15,23,42,0.38);
+    --mud-palette-divider: rgba(0,0,0,0.07);
+    --mud-palette-divider-light: rgba(0,0,0,0.04);
+    --mud-palette-error: #DC2626;
+    --mud-palette-error-text: #FFFFFF;
+    --mud-palette-success: #16A34A;
+    --mud-palette-success-text: #FFFFFF;
+    --mud-palette-warning: #D97706;
+    --mud-palette-warning-text: #FFFFFF;
+    --mud-palette-info: #0EA5E9;
+    --mud-palette-info-text: #FFFFFF;
+    --mud-palette-lines-default: rgba(0,0,0,0.12);
+    --mud-palette-lines-inputs: rgba(0,0,0,0.23);
+    --mud-palette-table-lines: rgba(0,0,0,0.12);
+    --mud-palette-table-striped: rgba(0,0,0,0.02);
+    --mud-palette-table-hover: rgba(0,0,0,0.04);
+    --mud-palette-overlay-dark: rgba(33,33,33,0.5);
+    --mud-palette-overlay-light: rgba(15,23,42,0.4);
+
+    --mud-typography-default-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-default-size: 1rem;
+    --mud-typography-default-weight: 400;
+    --mud-typography-default-lineheight: 1.5;
+    --mud-typography-default-letterspacing: .00938em;
+    --mud-typography-h1-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h1-size: 6rem;
+    --mud-typography-h1-weight: 700;
+    --mud-typography-h1-lineheight: 1.167;
+    --mud-typography-h1-letterspacing: -.01562em;
+    --mud-typography-h2-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h2-size: 3.75rem;
+    --mud-typography-h2-weight: 700;
+    --mud-typography-h2-lineheight: 1.2;
+    --mud-typography-h2-letterspacing: -.00833em;
+    --mud-typography-h3-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h3-size: 3rem;
+    --mud-typography-h3-weight: 700;
+    --mud-typography-h3-lineheight: 1.167;
+    --mud-typography-h3-letterspacing: 0;
+    --mud-typography-h4-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h4-size: 2.125rem;
+    --mud-typography-h4-weight: 700;
+    --mud-typography-h4-lineheight: 1.235;
+    --mud-typography-h4-letterspacing: .00735em;
+    --mud-typography-h5-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h5-size: 1.5rem;
+    --mud-typography-h5-weight: 600;
+    --mud-typography-h5-lineheight: 1.334;
+    --mud-typography-h5-letterspacing: 0;
+    --mud-typography-h6-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-h6-size: 1.25rem;
+    --mud-typography-h6-weight: 600;
+    --mud-typography-h6-lineheight: 1.6;
+    --mud-typography-h6-letterspacing: .0075em;
+    --mud-typography-subtitle1-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-subtitle1-size: 1rem;
+    --mud-typography-subtitle1-weight: 400;
+    --mud-typography-subtitle1-lineheight: 1.75;
+    --mud-typography-subtitle1-letterspacing: .00938em;
+    --mud-typography-subtitle2-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-subtitle2-size: .875rem;
+    --mud-typography-subtitle2-weight: 500;
+    --mud-typography-subtitle2-lineheight: 1.57;
+    --mud-typography-subtitle2-letterspacing: .00714em;
+    --mud-typography-body1-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-body1-size: 1rem;
+    --mud-typography-body1-weight: 400;
+    --mud-typography-body1-lineheight: 1.5;
+    --mud-typography-body1-letterspacing: .00938em;
+    --mud-typography-body2-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-body2-size: .875rem;
+    --mud-typography-body2-weight: 400;
+    --mud-typography-body2-lineheight: 1.43;
+    --mud-typography-body2-letterspacing: .01071em;
+    --mud-typography-button-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-button-size: .875rem;
+    --mud-typography-button-weight: 600;
+    --mud-typography-button-lineheight: 1.75;
+    --mud-typography-button-letterspacing: .02857em;
+    --mud-typography-button-texttransform: none;
+    --mud-typography-caption-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-caption-size: .75rem;
+    --mud-typography-caption-weight: 400;
+    --mud-typography-caption-lineheight: 1.66;
+    --mud-typography-caption-letterspacing: .03333em;
+    --mud-typography-overline-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mud-typography-overline-size: .75rem;
+    --mud-typography-overline-weight: 400;
+    --mud-typography-overline-lineheight: 2.66;
+    --mud-typography-overline-letterspacing: .08333em;
+    --mud-typography-overline-texttransform: uppercase;
+
+    --mud-default-borderradius: 10px;
+    --mud-appbar-height: 64px;
+
+    /* Z-indexes (from MudBlazor default) */
+    --mud-zindex-drawer: 1100;
+    --mud-zindex-appbar: 1300;
+    --mud-zindex-dialog: 1400;
+    --mud-zindex-popover: 1200;
+    --mud-zindex-snackbar: 1400;
+    --mud-zindex-tooltip: 1600;
+}
+
+body[data-mud-theme="dark"] {
+    --mud-palette-primary: #3B82F6;
+    --mud-palette-primary-text: #FFFFFF;
+    --mud-palette-primary-darken: #2563EB;
+    --mud-palette-primary-lighten: #93C5FD;
+    --mud-palette-primary-hover: rgba(59, 130, 246, 0.06);
+    --mud-palette-secondary: #38BDF8;
+    --mud-palette-secondary-text: #FFFFFF;
+    --mud-palette-secondary-darken: #0284C7;
+    --mud-palette-secondary-lighten: #7DD3FC;
+    --mud-palette-secondary-hover: rgba(56, 189, 248, 0.06);
+    --mud-palette-appbar-background: #0F172A;
+    --mud-palette-appbar-text: #F1F5F9;
+    --mud-palette-background: #0F172A;
+    --mud-palette-surface: #1E293B;
+    --mud-palette-drawer-background: #1E293B;
+    --mud-palette-drawer-text: #E2E8F0;
+    --mud-palette-drawer-icon: #94A3B8;
+    --mud-palette-action-default: #94A3B8;
+    --mud-palette-action-disabled: rgba(255,255,255,0.26);
+    --mud-palette-action-disabled-background: rgba(255,255,255,0.12);
+    --mud-palette-action-hover: rgba(255,255,255,0.04);
+    --mud-palette-text-primary: #F1F5F9;
+    --mud-palette-text-secondary: #94A3B8;
+    --mud-palette-text-disabled: rgba(255,255,255,0.38);
+    --mud-palette-divider: rgba(255,255,255,0.07);
+    --mud-palette-divider-light: rgba(255,255,255,0.04);
+    --mud-palette-error: #F87171;
+    --mud-palette-error-text: #FFFFFF;
+    --mud-palette-success: #4ADE80;
+    --mud-palette-success-text: #FFFFFF;
+    --mud-palette-warning: #FBBF24;
+    --mud-palette-warning-text: #FFFFFF;
+    --mud-palette-info: #38BDF8;
+    --mud-palette-info-text: #FFFFFF;
+    --mud-palette-lines-default: rgba(255,255,255,0.12);
+    --mud-palette-lines-inputs: rgba(255,255,255,0.23);
+    --mud-palette-table-lines: rgba(255,255,255,0.12);
+    --mud-palette-table-striped: rgba(255,255,255,0.02);
+    --mud-palette-table-hover: rgba(255,255,255,0.04);
+}
+
+/* Base resets relying on variables */
+body {
+    background-color: var(--mud-palette-background);
+    color: var(--mud-palette-text-primary);
+    font-family: var(--mud-typography-default-family);
+    font-size: var(--mud-typography-default-size);
+    font-weight: var(--mud-typography-default-weight);
+    line-height: var(--mud-typography-default-lineheight);
+}
+
+/* Theme transition */
+body * {
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+/* ... existing keyframes ... */
+@keyframes pm-toast-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pm-msg-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pm-rec-pulse {
+    0%   { opacity: 1;   transform: scale(1); }
+    50%  { opacity: .35; transform: scale(1.15); }
+    100% { opacity: 1;   transform: scale(1); }
+}
+
+.pm-msg-wrap {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 6px;
+    padding: 0 16px;
+    position: relative;
+}
+.pm-msg-mine { align-items: flex-end; }
+
+/* CHAT CSS CLEANUP - Handled by MudBlazor classes now */
+.pm-msg-highlight .mud-paper {
+    outline: 2px solid var(--mud-palette-primary) !important;
+    background: rgba(var(--mud-palette-primary-rgb), 0.1) !important;
+}
+
+.pm-msg-sender {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--mud-palette-primary);
+    margin-bottom: 2px;
+    display: block;
+    margin-left: 12px;
+}
+.pm-msg-time {
+    font-size: 0.7rem;
+    color: var(--mud-palette-text-secondary);
+    margin-left: 8px;
+    opacity: 0.8;
+}
+.pm-msg-mine .pm-msg-time {
+    color: rgba(255,255,255,0.7);
+}
+.pm-msg-action-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: var(--mud-palette-surface);
+    color: var(--mud-palette-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: 0.15s;
+}
+.pm-msg-action-btn:hover {
+    background: var(--mud-palette-background-grey);
+    color: var(--mud-palette-primary);
+    transform: scale(1.1);
+}
+.pm-reactions-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: -6px;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 2;
+}
+.pm-msg-mine .pm-reactions-bar {
+    justify-content: flex-end;
+}
+.pm-reaction-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.pm-reaction-chip.active {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--mud-palette-primary);
+    color: var(--mud-palette-primary);
+}
+.pm-system-message-row {
+    text-align: center;
+    margin: 12px 0;
+}
+.pm-system-message-text {
+    background: rgba(0,0,0,.04);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    color: var(--mud-palette-text-secondary);
+    display: inline-block;
+}

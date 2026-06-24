@@ -1,0 +1,163 @@
+@{
+    ViewData["Title"] = "Đã chặn - PingMe";
+}
+
+@section Styles {
+    <link href="/css/blocked.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div style="height:100%;overflow-y:auto;padding:24px 16px;background:var(--mud-palette-background);">
+    <div class="pm-blocked-page">
+        <div class="pm-blocked-header">
+            <div>
+                <h1 class="pm-page-title" style="font-size:1.5rem;font-weight:800;margin:0;color:var(--mud-palette-text-primary);">Người dùng đã chặn</h1>
+                <p class="pm-page-subtitle" style="margin:4px 0 0;color:var(--mud-palette-text-secondary);">Quản lý danh sách những người dùng bạn đã chặn.</p>
+            </div>
+        </div>
+
+        <!-- Blocked list -->
+        <div id="pm-blocked-list">
+            <div style="text-align:center;padding:32px;"><div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:32px;height:32px;margin:0 auto;"><svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg></div></div>
+        </div>
+
+        <!-- Block a new user -->
+        <div class="pm-block-panel">
+            <h6>Chặn người dùng</h6>
+            <p class="sub">Nhập ID hoặc tên để tìm. Họ sẽ không thể nhắn tin hay tương tác với bạn.</p>
+            <input type="text" id="pm-block-search" class="pm-block-search-input" placeholder="Nhập ID hoặc tên để tìm..."
+                   autocomplete="off" oninput="pmBlocked.onSearch(this.value)" />
+            <div id="pm-block-results"></div>
+            <div id="pm-block-selected"></div>
+            <div class="pm-block-actions">
+                <button type="button" id="pm-block-clear" class="pm-blk-btn text" onclick="pmBlocked.clearSelection()" disabled>Hủy chọn</button>
+                <button type="button" id="pm-block-confirm" class="pm-blk-btn err-filled" onclick="pmBlocked.blockSelected()" disabled>Chặn</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmBlocked = (() => {
+    const $ = id => document.getElementById(id);
+    let _blocked = [];
+    let _results = [];
+    let _selected = null;
+    let _timer = null;
+
+    function fmt(iso) {
+        const d = new Date(iso); if (isNaN(d)) return '';
+        return d.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' +
+               d.toLocaleTimeString('vi-VN', {hour:'2-digit',minute:'2-digit'});
+    }
+    const initial = n => (n || '?').trim().charAt(0).toUpperCase() || '?';
+    function abs(u) { return u ? (pmApi.backendUrl || '') + u : ''; }
+
+    async function load() {
+        _blocked = await pmApi.get('/api/blocks') || [];
+        const list = $('pm-blocked-list');
+        if (!_blocked.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-info" style="margin-bottom:4px;"><div class="mud-alert-message">Bạn chưa chặn ai.</div></div>';
+            return;
+        }
+        list.innerHTML = '<div class="pm-blocked-list">' + _blocked.map(b => `
+            <div class="pm-blocked-item">
+                <div class="pm-blocked-user">
+                    <div class="pm-blocked-avatar">${b.avatarUrl ? `<img src="${pmEscape(abs(b.avatarUrl))}" onerror="this.style.display='none'">` : ''}<span>${pmEscape(initial(b.displayName))}</span></div>
+                    <div style="min-width:0;flex:1;">
+                        <p style="margin:0;font-weight:700;font-size:.92rem;color:var(--mud-palette-text-primary);">${pmEscape(b.displayName)}</p>
+                        <p style="margin:0;font-size:.78rem;color:var(--mud-palette-text-secondary);">Thời gian chặn ${fmt(b.createdAt)}</p>
+                    </div>
+                </div>
+                <button type="button" class="pm-blk-btn success" onclick="pmBlocked.unblock(${b.blockedUserId})">Bỏ chặn</button>
+            </div>`).join('') + '</div>';
+    }
+
+    async function unblock(userId) {
+        const r = await pmApi.delete('/api/blocks/' + userId);
+        if (r !== null) { pmToast.success('Đã bỏ chặn'); await load(); }
+        else pmToast.error('Bỏ chặn thất bại');
+    }
+
+    function onSearch(q) {
+        clearTimeout(_timer);
+        _selected = null;
+        _renderSelected();
+        if (!q || !q.trim()) { _results = []; _renderResults(); return; }
+        _timer = setTimeout(async () => {
+            const res = await pmApi.get('/api/search?q=' + encodeURIComponent(q) + '&limit=8') || {};
+            const users = res.users || (Array.isArray(res) ? res : []);
+            const blockedIds = new Set(_blocked.map(b => b.blockedUserId));
+            _results = users.filter(u => !blockedIds.has(u.id));
+            _renderResults(q);
+        }, 350);
+    }
+
+    function _renderResults(q) {
+        const box = $('pm-block-results');
+        if (!_results.length) {
+            box.innerHTML = (q && q.trim())
+                ? '<div class="mud-alert mud-alert-filled mud-alert-filled-info" style="margin-top:12px;"><div class="mud-alert-message">Không tìm thấy kết quả.</div></div>'
+                : '';
+            return;
+        }
+        box.innerHTML = '<div class="pm-block-search-results">' + _results.map(u => `
+            <button type="button" class="pm-block-user-result ${_selected && _selected.id === u.id ? 'active' : ''}" onclick="pmBlocked.select(${u.id})">
+                <div class="pm-block-result-avatar">${pmEscape(initial(u.displayName))}</div>
+                <div style="min-width:0;text-align:left;flex:1;">
+                    <div class="pm-block-user-name">${pmEscape(u.displayName)}</div>
+                    <div class="pm-block-user-username">@@${pmEscape(u.username)}</div>
+                </div>
+                ${_selected && _selected.id === u.id ? '<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--mud-palette-error);"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>' : ''}
+            </button>`).join('') + '</div>';
+    }
+
+    function select(id) {
+        _selected = _results.find(u => u.id === id) || null;
+        _renderResults();
+        _renderSelected();
+    }
+
+    function _renderSelected() {
+        const box = $('pm-block-selected');
+        const clearBtn = $('pm-block-clear');
+        const confirmBtn = $('pm-block-confirm');
+        if (_selected) {
+            box.innerHTML = `<div class="mud-alert mud-alert-filled mud-alert-filled-warning" style="margin-top:12px;"><div class="mud-alert-message">Đang chọn: <b>${pmEscape(_selected.displayName)}</b> (@@${pmEscape(_selected.username)})</div></div>`;
+            confirmBtn.disabled = false;
+        } else {
+            box.innerHTML = '';
+            confirmBtn.disabled = true;
+        }
+        const hasSearch = ($('pm-block-search').value || '').trim().length > 0;
+        clearBtn.disabled = !_selected && !hasSearch;
+    }
+
+    function clearSelection() {
+        _selected = null;
+        _results = [];
+        $('pm-block-search').value = '';
+        _renderResults();
+        _renderSelected();
+    }
+
+    async function blockSelected() {
+        if (!_selected) return;
+        const btn = $('pm-block-confirm');
+        btn.disabled = true;
+        const r = await pmApi.post('/api/blocks/' + _selected.id, {});
+        if (r !== null) {
+            pmToast.success('Đã chặn ' + _selected.displayName);
+            clearSelection();
+            await load();
+        } else {
+            pmToast.error('Chặn thất bại');
+            btn.disabled = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', load);
+    return { onSearch, select, clearSelection, blockSelected, unblock };
+})();
+</script>
+}

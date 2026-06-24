@@ -450,6 +450,7 @@ public class GroupService : IGroupService
             {
                 UserId      = m.UserId,
                 DisplayName = m.User.DisplayName,
+                Username    = m.User.Username,
                 AvatarUrl   = m.User.AvatarUrl,
                 IsOnline    = m.User.IsOnline,
                 Role        = m.Role.ToString(),

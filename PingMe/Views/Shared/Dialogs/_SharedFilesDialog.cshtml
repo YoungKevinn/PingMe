@@ -1,0 +1,89 @@
+<!-- Shared Files Dialog -->
+<div id="pm-shared-files-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;">
+    <div style="background:var(--mud-palette-surface);border-radius:12px;max-width:560px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:min(90vh, 720px);">
+        
+        <!-- Header -->
+        <div class="pm-shared-title" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px 10px;">
+            <div>
+                <h6 class="mud-typography mud-typography-h6" style="margin:0;font-size:1.25rem;font-weight:600;">Tệp đã chia sẻ</h6>
+                <span class="mud-typography mud-typography-caption mud-secondary-text" id="pm-shared-files-title" style="font-size:0.75rem;color:var(--mud-palette-text-secondary);display:none;"></span>
+            </div>
+            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-size-small" onclick="pmDialogs.closeSharedFiles()" style="color:var(--mud-palette-text-secondary);">
+                <span class="mud-icon-button-label">
+                    <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </span>
+                </span>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="pm-shared-content" style="padding:8px 20px 16px;overflow:auto;">
+            <!-- Loading -->
+            <div id="pm-shared-files-loading" style="min-height:180px;display:flex;align-items:center;justify-content:center;">
+                <div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:32px;height:32px;margin:0 auto;color:var(--mud-palette-primary);">
+                    <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+                </div>
+            </div>
+
+            <!-- Empty -->
+            <div id="pm-shared-files-empty" style="display:none;min-height:180px;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--mud-palette-text-secondary);text-align:center;">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:42px;opacity:.55;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                </span>
+                <span>Chưa có tệp nào được chia sẻ.</span>
+            </div>
+
+            <!-- List -->
+            <div id="pm-shared-files-list" style="display:none;flex-direction:column;gap:8px;max-height:min(64vh, 560px);overflow:auto;padding:2px 2px 8px;">
+                <!-- Injected by JS -->
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="pm-shared-actions" style="display:flex;justify-content:flex-end;padding:8px 20px 16px;">
+            <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" onclick="pmDialogs.closeSharedFiles()">
+                <span class="mud-button-label">Đóng</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.pm-shared-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 10px;
+    background: var(--mud-palette-surface);
+}
+.pm-shared-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(100, 116, 139, .14);
+    color: #475569;
+}
+.pm-shared-icon.image {
+    background: rgba(16, 185, 129, .14);
+    color: #047857;
+}
+.pm-shared-open {
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 999px;
+    padding: 7px 12px;
+    color: var(--mud-palette-primary);
+    font-weight: 800;
+    font-size: .82rem;
+    text-decoration: none;
+}
+.pm-shared-open:hover {
+    background: rgba(59, 130, 246, .12);
+}
+</style>

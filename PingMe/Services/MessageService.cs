@@ -243,13 +243,20 @@ public class MessageService : IMessageService
                     .ToListAsync();
 
                 var notifyTasks = new List<Task>();
+                bool isMentionAll = content.Contains("@all", StringComparison.OrdinalIgnoreCase);
 
                 foreach (var m in members)
                 {
-                    var display = m.User?.DisplayName;
-                    if (string.IsNullOrWhiteSpace(display)) continue;
+                    if (m.User == null) continue;
 
-                    if (content.IndexOf("@" + display, StringComparison.OrdinalIgnoreCase) >= 0)
+                    var display = m.User.DisplayName;
+                    var username = m.User.Username;
+
+                    bool isMentioned = isMentionAll ||
+                        (!string.IsNullOrWhiteSpace(display) && content.Contains("@" + display, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrWhiteSpace(username) && content.Contains("@" + username, StringComparison.OrdinalIgnoreCase));
+
+                    if (isMentioned)
                     {
                         var payload = new
                         {

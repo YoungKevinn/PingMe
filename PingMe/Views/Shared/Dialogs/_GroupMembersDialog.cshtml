@@ -1,0 +1,90 @@
+<!-- Group Members Dialog -->
+<div id="pm-group-members-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;">
+    <div style="background:var(--mud-palette-surface);border-radius:12px;max-width:600px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:min(90vh, 720px);">
+        
+        <!-- Header -->
+        <div class="pm-dialog-title-wrap" style="padding:16px 20px 10px;">
+            <div class="pm-gm-title" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+                <div class="pm-gm-title-main" style="min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px;flex:1;">
+                    <div class="pm-gm-title-row" style="min-width:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <h6 class="mud-typography mud-typography-h6 pm-gm-title-text" style="margin:0;line-height:1.2;font-size:1.25rem;font-weight:600;">Quản lý thành viên</h6>
+                        <span id="pm-gm-count" class="pm-gm-count" style="display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:3px 10px;border-radius:999px;background:rgba(37, 99, 235, .12);color:var(--mud-palette-primary);font-size:.78rem;font-weight:700;line-height:1;white-space:nowrap;transform:translateY(1px);"></span>
+                    </div>
+                    <span class="mud-typography mud-typography-caption mud-secondary-text pm-gm-group-name" id="pm-gm-group-name" style="display:none;line-height:1.2;"></span>
+                </div>
+                <button type="button" class="mud-button-root mud-icon-button mud-icon-button-size-small" onclick="pmDialogs.closeGroupMembers()" style="color:var(--mud-palette-text-secondary);">
+                    <span class="mud-icon-button-label">
+                        <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        </span>
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="pm-dialog-body-wrap" style="padding:8px 20px 16px;overflow:auto;">
+            <!-- Loading -->
+            <div id="pm-gm-loading" class="pm-gm-loading" style="min-height:180px;display:flex;align-items:center;justify-content:center;">
+                <div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:32px;height:32px;color:var(--mud-palette-primary);">
+                    <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+                </div>
+            </div>
+
+            <!-- Empty -->
+            <div id="pm-gm-empty" style="display:none;">
+                <div class="mud-alert mud-alert-filled-info mud-elevation-0" style="padding:6px 16px;border-radius:8px;background:rgba(59,130,246,0.1);color:#3B82F6;">
+                    <div class="mud-alert-position">Nhóm chưa có thành viên.</div>
+                </div>
+            </div>
+
+            <!-- List -->
+            <div id="pm-gm-list" class="pm-gm-list" style="display:none;flex-direction:column;gap:8px;max-height:min(62vh, 560px);overflow:auto;padding:2px 2px 8px;">
+                <!-- Injected by JS -->
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="pm-dialog-actions-wrap" style="display:flex;justify-content:flex-end;padding:8px 20px 16px;">
+            <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" onclick="pmDialogs.closeGroupMembers()">
+                <span class="mud-button-label">Đóng</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.pm-gm-row {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 120px 180px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 12px;
+    background: var(--mud-palette-surface);
+}
+.pm-gm-role.admin { background: rgba(245, 158, 11, .17); color: #92400E; }
+.pm-gm-role.coadmin { background: rgba(37, 99, 235, .14); color: #1D4ED8; }
+.pm-gm-role.member { background: rgba(100, 116, 139, .14); color: #475569; }
+
+@@media (max-width: 640px) {
+    .pm-gm-row {
+        grid-template-columns: 48px minmax(0, 1fr) 112px;
+        gap: 10px;
+    }
+    .pm-gm-actions {
+        grid-column: 2 / -1;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+}
+@@media (max-width: 420px) {
+    .pm-gm-row { grid-template-columns: 44px minmax(0, 1fr); }
+    .pm-gm-role-cell, .pm-gm-actions {
+        grid-column: 2 / -1;
+        justify-content: flex-start;
+    }
+}
+</style>

@@ -1,0 +1,27 @@
+<!-- Edit History Dialog -->
+<div id="pm-edit-history-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center;">
+    <div style="background:var(--mud-palette-surface);border-radius:12px;max-width:500px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:min(90vh, 720px);">
+        
+        <!-- Header -->
+        <div class="pm-dialog-title" style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--mud-palette-divider);">
+            <h6 class="mud-typography mud-typography-h6" style="margin:0;font-size:1.25rem;font-weight:600;">Lịch sử chỉnh sửa</h6>
+        </div>
+
+        <!-- Body -->
+        <div class="pm-dialog-body" style="padding:16px 24px;overflow:auto;">
+            <div id="pm-edit-history-list" style="display:flex;flex-direction:column;gap:12px;">
+                <!-- Injected by JS -->
+            </div>
+            <div id="pm-edit-history-empty" style="display:none;">
+                <p class="mud-typography mud-typography-body1" style="color:var(--mud-palette-text-secondary);">Không có lịch sử chỉnh sửa.</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="pm-dialog-actions" style="padding:8px 16px 16px;display:flex;align-items:center;justify-content:flex-end;">
+            <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" onclick="pmDialogs.closeEditHistory()">
+                <span class="mud-button-label">Đóng</span>
+            </button>
+        </div>
+    </div>
+</div>

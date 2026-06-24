@@ -1,0 +1,97 @@
+<!-- Call Overlay -->
+<div id="pm-call-overlay" class="pm-call-overlay" style="display:none; left:50px; top:50px;">
+    
+    <div id="pm-call-header" class="pm-call-header">
+        <span class="mud-icon-root mud-svg-icon pm-call-icon" style="font-size:20px;margin-right:8px;">
+            <!-- Icon injected by JS -->
+        </span>
+        <h6 class="mud-typography mud-typography-subtitle2" id="pm-call-title" style="margin:0;flex:1;">
+            <!-- Title injected by JS -->
+        </h6>
+        <span class="mud-typography mud-typography-caption pm-call-duration" id="pm-call-duration" style="margin-right:8px;display:none;">00:00</span>
+    </div>
+
+    <div id="pm-call-body" class="pm-call-body">
+        <div id="pm-call-videos" class="pm-call-videos" style="display:none;">
+            <video id="remote-video" autoplay playsinline></video>
+            <video id="local-video" autoplay playsinline muted></video>
+        </div>
+
+        <div id="pm-call-avatar-wrap" class="pm-call-avatar-wrap" style="display:flex;align-items:center;justify-content:center;height:100%;">
+            <div class="mud-avatar mud-avatar-large mud-avatar-filled mud-avatar-filled-primary" style="height:80px;width:80px;font-size:2rem;position:relative;overflow:hidden;">
+                <span id="pm-call-avatar-initial" style="font-weight:700;">?</span>
+                <img id="pm-call-avatar-img" src="" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.style.display='none'" />
+            </div>
+        </div>
+    </div>
+
+    <div id="pm-call-controls" class="pm-call-controls">
+        <!-- Controls injected by JS based on state -->
+    </div>
+</div>
+
+<style>
+    .pm-call-overlay {
+        position: fixed;
+        width: 320px;
+        background: var(--mud-palette-surface);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+        z-index: 300000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        user-select: none;
+    }
+    .pm-call-header {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        background: var(--mud-palette-primary);
+        color: white;
+        cursor: move;
+    }
+    .pm-call-body {
+        position: relative;
+        height: 240px;
+        background: #111;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .pm-call-body.no-video {
+        height: 160px;
+        background: var(--mud-palette-background);
+    }
+    .pm-call-videos {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    #remote-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    #local-video {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        width: 80px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 2px solid rgba(255,255,255,0.2);
+        background: #000;
+        transform: scaleX(-1);
+    }
+    .pm-call-controls {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        padding: 16px;
+        background: var(--mud-palette-surface);
+        border-top: 1px solid var(--mud-palette-divider);
+    }
+</style>

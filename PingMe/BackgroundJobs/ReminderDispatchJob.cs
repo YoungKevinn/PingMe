@@ -38,7 +38,14 @@ public class ReminderDispatchJob : BackgroundService
                 _logger.LogError(ex, "Error in ReminderDispatchJob.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore cancellation exception on shutdown
+            }
         }
     }
 }

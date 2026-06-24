@@ -1,0 +1,873 @@
+@{
+    ViewData["Title"] = "Code Snippets - PingMe";
+}
+
+<!-- Main container matching MudContainer MaxWidth.Large mt-6 -->
+<div class="mud-container mud-container-maxwidth-lg mt-6">
+    <!-- Header row -->
+    <div class="d-flex justify-space-between align-center mb-4">
+        <div>
+            <h5 class="mud-typography mud-typography-h5 font-weight-bold">💻 Code Snippets</h5>
+            <p class="mud-typography mud-typography-body2 mud-secondary-text">
+                Quản lý và chia sẻ đoạn code
+            </p>
+        </div>
+        <button type="button" onclick="pmSnippets.openCreate()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple">
+            <span class="mud-button-label">
+                <span class="mud-button-icon-start mud-button-icon-size-medium">
+                    <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                </span>
+                Thêm snippet
+            </span>
+        </button>
+    </div>
+
+    <!-- Filter row in MudPaper Outlined -->
+    <div class="mud-paper mud-paper-outlined pa-3 mb-4" style="border-radius:var(--mud-default-borderradius);">
+        <div class="pm-snippet-filter-row">
+            <!-- Search field -->
+            <div class="mud-input-control mud-input-control-margin-dense" style="flex:1;">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined mud-input-adorned-start mud-input-margin-dense mud-shrink">
+                        <div class="mud-input-adornment mud-input-adornment-start">
+                            <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                        </div>
+                        <input type="text" id="snip-search" placeholder="Tìm kiếm snippet..." class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-adorned-start mud-input-root-margin-dense" oninput="pmSnippets.applyFilter()" />
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- Language filter dropdown -->
+            <div class="pm-custom-select" id="snip-lang-filter-wrap">
+                <button type="button" class="pm-custom-select-button" onclick="pmSnippets.toggleFilterLangDropdown()">
+                    <span id="snip-lang-filter-label">Tất cả ngôn ngữ</span>
+                    <span class="pm-select-arrow">▾</span>
+                </button>
+                <div class="pm-custom-select-menu" id="snip-lang-filter-menu" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snippets list container -->
+    <div id="pm-snippets-list">
+        <div style="display:flex;justify-content:center;padding:48px;">
+            <div class="mud-progress-circular mud-progress-circular-indeterminate mud-progress-circular-color-primary" style="width:40px;height:40px;">
+                <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div id="pm-snippet-create-overlay" class="pm-modal-backdrop" style="display:none;" onclick="pmSnippets.closeCreate()">
+    <div class="pm-modal-card pm-snippet-modal" onclick="event.stopPropagation()">
+        <div class="pm-modal-header">
+            <div>
+                <h6 class="mud-typography mud-typography-h6">Tạo Snippet mới</h6>
+                <p class="mud-typography mud-typography-caption mud-secondary-text">Chia sẻ đoạn code với nhóm</p>
+            </div>
+            <button type="button" class="pm-modal-x" onclick="pmSnippets.closeCreate()">×</button>
+        </div>
+        <div class="pm-modal-body">
+            <div class="mud-input-control mud-input-control-full-width mb-3">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined">
+                        <input type="text" id="snip-create-title" placeholder=" " class="mud-input-slot mud-input-root mud-input-root-outlined" />
+                        <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol">Tiêu đề</label>
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+                <p class="mud-input-helper-text"><span class="mud-input-helper-text">Không bắt buộc</span></p>
+            </div>
+
+            <div class="pm-form-label">Ngôn ngữ</div>
+            <div class="pm-custom-select pm-custom-select-full" id="snip-create-lang-wrap">
+                <button type="button" class="pm-custom-select-button" onclick="pmSnippets.toggleCreateLangDropdown()">
+                    <span id="snip-create-lang-label">csharp</span>
+                    <span class="pm-select-arrow">▾</span>
+                </button>
+                <div class="pm-custom-select-menu" id="snip-create-lang-menu" style="display:none;"></div>
+            </div>
+
+            <div class="mud-input-control mud-input-control-full-width mt-3">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined">
+                        <textarea id="snip-create-code" rows="12" placeholder=" " class="mud-input-slot mud-input-root mud-input-root-outlined" style="font-family:'Fira Code',Consolas,monospace;"></textarea>
+                        <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol">Code</label>
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+                <p class="mud-input-helper-text"><span class="mud-input-helper-text">Dán đoạn code của bạn</span></p>
+            </div>
+
+            <div class="pm-form-label mt-3">Thời gian hết hạn</div>
+            <div class="pm-expiry-options" id="snip-expiry-options">
+                <!-- filled by JS -->
+            </div>
+        </div>
+        <div class="pm-modal-actions">
+            <button type="button" onclick="pmSnippets.closeCreate()" class="mud-button-root mud-button mud-button-text mud-ripple">
+                <span class="mud-button-label">Hủy</span>
+            </button>
+            <button type="button" onclick="pmSnippets.createSnippet()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple">
+                <span class="mud-button-label">Tạo</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="pm-snippet-edit-overlay" class="pm-modal-backdrop" style="display:none;" onclick="pmSnippets.closeEdit()">
+    <div class="pm-modal-card pm-snippet-modal" onclick="event.stopPropagation()">
+        <div class="pm-modal-header">
+            <div>
+                <h6 class="mud-typography mud-typography-h6">Chỉnh sửa Snippet</h6>
+                <p class="mud-typography mud-typography-caption mud-secondary-text">Cập nhật nội dung snippet</p>
+            </div>
+            <button type="button" class="pm-modal-x" onclick="pmSnippets.closeEdit()">×</button>
+        </div>
+        <div class="pm-modal-body">
+            <div class="mud-input-control mud-input-control-full-width mb-3">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined">
+                        <input type="text" id="snip-edit-title" placeholder=" " class="mud-input-slot mud-input-root mud-input-root-outlined" />
+                        <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol">Tiêu đề</label>
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pm-form-label">Ngôn ngữ</div>
+            <div class="pm-custom-select pm-custom-select-full" id="snip-edit-lang-wrap">
+                <button type="button" class="pm-custom-select-button" onclick="pmSnippets.toggleEditLangDropdown()">
+                    <span id="snip-edit-lang-label">csharp</span>
+                    <span class="pm-select-arrow">▾</span>
+                </button>
+                <div class="pm-custom-select-menu" id="snip-edit-lang-menu" style="display:none;"></div>
+            </div>
+
+            <div class="mud-input-control mud-input-control-full-width mt-3">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined">
+                        <textarea id="snip-edit-code" rows="15" placeholder=" " class="mud-input-slot mud-input-root mud-input-root-outlined" style="font-family:'Fira Code',Consolas,monospace;"></textarea>
+                        <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol">Code</label>
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+                <p class="mud-input-helper-text"><span class="mud-input-helper-text">Dán đoạn code của bạn</span></p>
+            </div>
+        </div>
+        <div class="pm-modal-actions">
+            <button type="button" onclick="pmSnippets.closeEdit()" class="mud-button-root mud-button mud-button-text mud-ripple">
+                <span class="mud-button-label">Hủy</span>
+            </button>
+            <button type="button" onclick="pmSnippets.updateSnippet()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple">
+                <span class="mud-button-label">Lưu thay đổi</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- View Modal -->
+<div id="pm-snippet-view-overlay" class="pm-modal-backdrop" style="display:none;" onclick="pmSnippets.closeView()">
+    <div class="pm-modal-card pm-view-modal" onclick="event.stopPropagation()">
+        <div class="pm-modal-header">
+            <div>
+                <h6 class="mud-typography mud-typography-h6" id="snip-view-title">Snippet</h6>
+                <p class="mud-typography mud-typography-caption mud-secondary-text" id="snip-view-lang"></p>
+            </div>
+            <button type="button" class="pm-modal-x" onclick="pmSnippets.closeView()">×</button>
+        </div>
+        <div class="pm-modal-body">
+            <div class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small"><span class="mud-chip-content" id="snip-view-lang-chip"></span></div>
+            <pre class="pm-code-view" id="snip-view-code-wrap"><code id="snip-view-code"></code></pre>
+        </div>
+        <div class="pm-modal-actions">
+            <button type="button" onclick="pmSnippets.closeView()" class="mud-button-root mud-button mud-button-text mud-ripple">
+                <span class="mud-button-label">Đóng</span>
+            </button>
+            <button type="button" onclick="pmSnippets.copyViewingCode()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple">
+                <span class="mud-button-label">Copy code</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Fullscreen Modal -->
+<div id="pm-snippet-fullscreen-overlay" class="pm-modal-backdrop pm-fullscreen-backdrop pm-snippet-fullscreen-overlay" style="display:none;" onclick="pmSnippets.closeFullscreen()">
+    <div class="pm-modal-card pm-fullscreen-modal" onclick="event.stopPropagation()">
+        <div class="pm-fullscreen-header">
+            <div class="pm-fullscreen-title-wrap">
+                <h6 class="mud-typography mud-typography-h6 font-weight-bold" id="snip-fs-title">Code snippet</h6>
+                <p class="mud-typography mud-typography-caption mud-secondary-text" id="snip-fs-lang"></p>
+            </div>
+            <div class="pm-fullscreen-actions">
+                <button type="button" onclick="pmSnippets.copyFullscreenCode()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple">
+                    <span class="mud-button-label">Copy code</span>
+                </button>
+                <button type="button" class="pm-modal-x" onclick="pmSnippets.closeFullscreen()">×</button>
+            </div>
+        </div>
+        <div class="pm-fullscreen-body">
+            <pre class="pm-code-fullscreen" id="snip-fs-code-wrap"><code id="snip-fs-code"></code></pre>
+        </div>
+    </div>
+</div>
+
+<style>
+    .pm-snippet-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .pm-snippet-card {
+        height: 100%;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    .pm-snippet-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .pm-snippet-badge.revoked {
+        background: rgba(239, 68, 68, .14);
+        color: #F87171;
+        border: 1px solid rgba(239, 68, 68, .28);
+    }
+    .pm-snippet-badge.expired {
+        background: rgba(245, 158, 11, .14);
+        color: #FBBF24;
+        border: 1px solid rgba(245, 158, 11, .28);
+    }
+    .pm-snippet-badge.expiring {
+        background: rgba(59, 130, 246, .14);
+        color: #60A5FA;
+        border: 1px solid rgba(59, 130, 246, .28);
+    }
+    .pm-snippet-badge.active {
+        background: rgba(34, 197, 94, .14);
+        color: #4ADE80;
+        border: 1px solid rgba(34, 197, 94, .28);
+    }
+    .pm-code-preview {
+        position: relative;
+        font-size: 12px;
+        line-height: 1.55;
+        margin: 0;
+        overflow: hidden;
+        background: #0B1120;
+        border: 1px solid rgba(148, 163, 184, .18);
+        border-radius: 12px;
+        font-family: 'Fira Code', Consolas, monospace;
+    }
+    .pm-code-preview code {
+        display: block;
+        padding: 14px;
+        overflow-x: auto;
+        white-space: pre;
+        word-break: normal;
+        background: transparent;
+        min-height: 52px;
+    }
+    .pm-code-view {
+        position: relative;
+        font-family: 'Fira Code', Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.65;
+        margin-top: 12px;
+        max-height: 420px;
+        overflow: auto;
+        background: #0B1120;
+        color: #E5E7EB;
+        border: 1px solid rgba(148, 163, 184, .18);
+        border-radius: 12px;
+    }
+    .pm-code-view code {
+        display: block;
+        padding: 14px;
+        min-width: max-content;
+        white-space: pre;
+        word-break: normal;
+        background: transparent;
+    }
+    .pm-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 200000;
+        background: rgba(0, 0, 0, .58);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 82px 24px 24px 24px;
+    }
+    .pm-modal-card {
+        width: min(960px, 100%);
+        max-height: calc(100vh - 48px);
+        overflow: hidden;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.45);
+    }
+    .pm-snippet-modal { max-width: 960px; }
+    .pm-view-modal { max-width: 920px; }
+    .pm-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 24px 12px;
+        flex-shrink: 0;
+    }
+    .pm-modal-x {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--mud-palette-text-secondary);
+        font-size: 30px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .pm-modal-x:hover {
+        background: rgba(148, 163, 184, .16);
+        color: var(--mud-palette-text-primary);
+    }
+    .pm-modal-body {
+        padding: 8px 24px 16px;
+        overflow: auto;
+        max-height: calc(100vh - 180px);
+    }
+    .pm-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 24px 20px;
+        border-top: 1px solid var(--mud-palette-divider);
+        flex-shrink: 0;
+    }
+    .pm-fullscreen-backdrop,
+    .pm-snippet-fullscreen-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 30000 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: none !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 24px !important;
+        background: var(--mud-palette-background) !important;
+        overflow: auto !important;
+    }
+    .pm-fullscreen-modal {
+        width: calc(100vw - 48px);
+        height: calc(100vh - 48px);
+        max-width: none !important;
+        max-height: none !important;
+        display: flex;
+        flex-direction: column;
+        background: #020617;
+        color: #E5E7EB;
+    }
+    .pm-fullscreen-header {
+        height: 68px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 22px;
+        background: #0F172A;
+        border-bottom: 1px solid rgba(148, 163, 184, .22);
+    }
+    .pm-fullscreen-title-wrap { min-width: 0; }
+    .pm-fullscreen-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+    .pm-fullscreen-actions .pm-modal-x {
+        position: static;
+        flex-shrink: 0;
+    }
+    .pm-fullscreen-body {
+        flex: 1;
+        min-height: 0;
+        padding: 18px;
+        overflow: hidden;
+        background: #020617;
+    }
+    .pm-code-fullscreen {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: auto;
+        background: #0B1120;
+        color: #E5E7EB;
+        border: 1px solid rgba(148, 163, 184, .18);
+        border-radius: 16px;
+        font-family: 'Fira Code', Consolas, monospace;
+        font-size: 14px;
+        line-height: 1.65;
+    }
+    .pm-code-fullscreen code {
+        display: block;
+        min-width: max-content;
+        padding: 24px;
+        background: transparent;
+        white-space: pre;
+        word-break: normal;
+    }
+    .pm-form-label {
+        color: var(--mud-palette-text-secondary);
+        font-size: 13px;
+        margin: 4px 0 6px;
+    }
+    .pm-custom-select {
+        position: relative;
+        width: 220px;
+        z-index: 20;
+    }
+    .pm-custom-select-full { width: 100%; }
+    .pm-custom-select-button {
+        width: 100%;
+        min-height: 40px;
+        padding: 0 12px;
+        border-radius: 10px;
+        border: 1px solid var(--mud-palette-lines-inputs);
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        font-size: 14px;
+        text-align: left;
+    }
+    .pm-custom-select-button:hover { border-color: var(--mud-palette-primary); }
+    .pm-select-arrow { opacity: .7; margin-left: 8px; }
+    .pm-custom-select-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 12px;
+        box-shadow: 0 18px 40px rgba(0,0,0,.35);
+        padding: 6px;
+        max-height: 260px;
+        overflow-y: auto;
+    }
+    .pm-custom-select-item {
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--mud-palette-text-primary);
+        text-align: left;
+        padding: 9px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        display: block;
+    }
+    .pm-custom-select-item:hover {
+        background: rgba(59, 130, 246, .14);
+        color: var(--mud-palette-primary);
+    }
+    .pm-custom-select-item.active {
+        background: var(--mud-palette-primary);
+        color: white;
+        font-weight: 700;
+    }
+    .pm-expiry-options {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
+    .pm-expiry-btn {
+        padding: 6px 14px;
+        border: 1px solid var(--mud-palette-lines-inputs);
+        border-radius: 10px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .pm-expiry-btn:hover {
+        border-color: var(--mud-palette-primary);
+        color: var(--mud-palette-primary);
+    }
+    .pm-expiry-btn.active {
+        background: var(--mud-palette-primary);
+        border-color: var(--mud-palette-primary);
+        color: white;
+        font-weight: 700;
+    }
+    @@media (max-width: 768px) {
+        .pm-snippet-filter-row { flex-direction: column; align-items: stretch; }
+        .pm-custom-select { width: 100%; }
+        .pm-modal-backdrop { padding: 70px 12px 12px 12px; }
+        .pm-fullscreen-backdrop, .pm-snippet-fullscreen-overlay { padding: 8px !important; }
+        .pm-fullscreen-modal { width: calc(100vw - 16px); height: calc(100vh - 16px); }
+        .pm-fullscreen-header { height: auto; min-height: 68px; align-items: flex-start; flex-direction: column; padding: 14px; }
+        .pm-fullscreen-actions { width: 100%; justify-content: space-between; }
+        .pm-fullscreen-body { padding: 10px; }
+    }
+</style>
+
+@section Scripts {
+<script>
+const pmSnippets = {
+    _items: [],
+    _languages: ['csharp','javascript','typescript','python','java','go','rust','cpp','c','php','ruby','swift','kotlin','html','css','sql','bash','powershell','json','xml','yaml','markdown','plaintext'],
+    _expiryOptions: [
+        { label: 'Không hết hạn', value: 'never' },
+        { label: '30 phút', value: '30m' },
+        { label: '1 giờ', value: '1h' },
+        { label: '1 ngày', value: '1d' },
+        { label: '7 ngày', value: '7d' },
+        { label: '30 ngày', value: '30d' }
+    ],
+    _filterLang: 'all',
+    _createLang: 'csharp',
+    _editLang: 'csharp',
+    _editId: null,
+    _viewItem: null,
+    _fsItem: null,
+    _expiryVal: 'never',
+
+    async init() {
+        this._renderExpiryOptions();
+        this._renderLangMenus();
+        const items = await pmApi.get('/api/snippets') || [];
+        this._items = items;
+        this.render();
+    },
+
+    _renderExpiryOptions() {
+        const c = document.getElementById('snip-expiry-options');
+        c.innerHTML = this._expiryOptions.map(o =>
+            `<button type="button" class="pm-expiry-btn${o.value === this._expiryVal ? ' active' : ''}" onclick="pmSnippets.setExpiry('${o.value}')">${pmEscape(o.label)}</button>`
+        ).join('');
+    },
+
+    setExpiry(val) {
+        this._expiryVal = val;
+        this._renderExpiryOptions();
+    },
+
+    _renderLangMenus() {
+        // Filter menu
+        const filterMenu = document.getElementById('snip-lang-filter-menu');
+        filterMenu.innerHTML = `<button type="button" class="pm-custom-select-item${this._filterLang === 'all' ? ' active' : ''}" onclick="pmSnippets.setFilterLang('all')">Tất cả ngôn ngữ</button>` +
+            this._languages.map(l =>
+                `<button type="button" class="pm-custom-select-item${this._filterLang === l ? ' active' : ''}" onclick="pmSnippets.setFilterLang('${l}')">${pmEscape(l)}</button>`
+            ).join('');
+
+        // Create menu
+        const createMenu = document.getElementById('snip-create-lang-menu');
+        createMenu.innerHTML = this._languages.map(l =>
+            `<button type="button" class="pm-custom-select-item${this._createLang === l ? ' active' : ''}" onclick="pmSnippets.setCreateLang('${l}')">${pmEscape(l)}</button>`
+        ).join('');
+
+        // Edit menu
+        const editMenu = document.getElementById('snip-edit-lang-menu');
+        editMenu.innerHTML = this._languages.map(l =>
+            `<button type="button" class="pm-custom-select-item${this._editLang === l ? ' active' : ''}" onclick="pmSnippets.setEditLang('${l}')">${pmEscape(l)}</button>`
+        ).join('');
+    },
+
+    toggleFilterLangDropdown() {
+        const m = document.getElementById('snip-lang-filter-menu');
+        m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    },
+    toggleCreateLangDropdown() {
+        const m = document.getElementById('snip-create-lang-menu');
+        m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    },
+    toggleEditLangDropdown() {
+        const m = document.getElementById('snip-edit-lang-menu');
+        m.style.display = m.style.display === 'none' ? 'block' : 'none';
+    },
+
+    setFilterLang(lang) {
+        this._filterLang = lang;
+        document.getElementById('snip-lang-filter-label').textContent = lang === 'all' ? 'Tất cả ngôn ngữ' : lang;
+        document.getElementById('snip-lang-filter-menu').style.display = 'none';
+        this._renderLangMenus();
+        this.render();
+    },
+    setCreateLang(lang) {
+        this._createLang = lang;
+        document.getElementById('snip-create-lang-label').textContent = lang;
+        document.getElementById('snip-create-lang-menu').style.display = 'none';
+        this._renderLangMenus();
+    },
+    setEditLang(lang) {
+        this._editLang = lang;
+        document.getElementById('snip-edit-lang-label').textContent = lang;
+        document.getElementById('snip-edit-lang-menu').style.display = 'none';
+        this._renderLangMenus();
+    },
+
+    applyFilter() {
+        this.render();
+    },
+
+    _getFiltered() {
+        let items = this._items;
+        const search = (document.getElementById('snip-search')?.value || '').toLowerCase();
+        if (search) {
+            items = items.filter(s =>
+                (s.title || '').toLowerCase().includes(search) ||
+                (s.content || s.code || '').toLowerCase().includes(search) ||
+                (s.language || '').toLowerCase().includes(search)
+            );
+        }
+        if (this._filterLang !== 'all') {
+            items = items.filter(s => (s.language || '').toLowerCase() === this._filterLang.toLowerCase());
+        }
+        return items;
+    },
+
+    _previewCode(code) {
+        if (!code) return '';
+        const lines = code.split('\n');
+        return lines.slice(0, 12).join('\n');
+    },
+
+    _getBadge(s) {
+        if (s.isRevoked) return '<span class="pm-snippet-badge revoked">🔒 Revoked</span>';
+        if (s.isExpired) return '<span class="pm-snippet-badge expired">⏰ Expired</span>';
+        if (s.expiresAt) return `<span class="pm-snippet-badge expiring">⏳ ${pmFmt.time(s.expiresAt)}</span>`;
+        return '<span class="pm-snippet-badge active">♾ No expiry</span>';
+    },
+
+    _svgIcon(path) {
+        return `<svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+    },
+
+    render() {
+        const list = document.getElementById('pm-snippets-list');
+        const filtered = this._getFiltered();
+
+        if (!this._items.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-info"><div class="mud-alert-message">Chưa có snippet nào</div></div>';
+            return;
+        }
+        if (!filtered.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-warning"><div class="mud-alert-message">Không tìm thấy snippet phù hợp</div></div>';
+            return;
+        }
+
+        const iconShare = this._svgIcon('M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z');
+        const iconCopy = this._svgIcon('M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z');
+        const iconEdit = this._svgIcon('M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z');
+        const iconView = this._svgIcon('M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z');
+        const iconFullscreen = this._svgIcon('M21 11V3h-8l3.29 3.29-10 10L3 13v8h8l-3.29-3.29 10-10z');
+        const iconRestore = this._svgIcon('M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z');
+        const iconLinkOff = this._svgIcon('M17 7h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1 0 1.43-.98 2.63-2.31 2.98l1.46 1.46C20.88 15.61 22 13.95 22 12c0-2.76-2.24-5-5-5zm-1 4h-2.19l2 2H16v-2zM2 4.27l3.11 3.11C3.29 8.12 2 9.91 2 12c0 2.76 2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1 0-1.59 1.21-2.9 2.76-3.07L8.73 11H8v2h2.73l6.37 6.37 1.41-1.41L3.41 2.86 2 4.27z');
+        const iconDelete = this._svgIcon('M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z');
+
+        list.innerHTML = '<div class="mud-grid mud-grid-spacing-xs-3">' +
+            filtered.map((s, idx) => {
+                const code = s.content || s.code || '';
+                const lang = s.language || 'plaintext';
+                const title = s.title || 'Untitled';
+                const created = s.createdAt ? new Date(s.createdAt).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+                const badge = this._getBadge(s);
+                const views = (s.accessCount || 0) > 0 ? `<p class="mud-typography mud-typography-caption mud-secondary-text"> · 👁 ${s.accessCount} views</p>` : '';
+
+                let revokeRestoreBtn = '';
+                if (s.isRevoked) {
+                    revokeRestoreBtn = `<button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-success mud-ripple" title="Khôi phục link" onclick="pmSnippets.restore(${s.id})"><span class="mud-icon-button-label">${iconRestore}</span></button>`;
+                } else if (!s.isExpired) {
+                    revokeRestoreBtn = `<button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-warning mud-ripple" title="Thu hồi link" onclick="pmSnippets.revoke(${s.id})"><span class="mud-icon-button-label">${iconLinkOff}</span></button>`;
+                }
+
+                return `<div class="mud-grid-item mud-grid-item-xs-12 mud-grid-item-md-6">
+                    <div class="mud-paper mud-paper-outlined mud-card pm-snippet-card">
+                        <div class="mud-card-header">
+                            <div class="mud-card-header-content">
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <div class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small"><span class="mud-chip-content">${pmEscape(lang)}</span></div>
+                                    <h6 class="mud-typography mud-typography-subtitle2 font-weight-bold">${pmEscape(title)}</h6>
+                                    ${badge}
+                                </div>
+                                <div class="d-flex align-center gap-2 mt-1">
+                                    <p class="mud-typography mud-typography-caption mud-secondary-text">${created}</p>
+                                    ${views}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mud-card-content" style="max-height:170px;overflow:hidden;">
+                            <pre class="pm-code-preview"><code class="language-${pmEscape(lang)}">${pmEscape(this._previewCode(code))}</code></pre>
+                        </div>
+                        <div class="mud-card-actions">
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-primary mud-ripple" title="Chia sẻ link" onclick="pmSnippets.shareLink('${s.shareToken || ''}')"><span class="mud-icon-button-label">${iconShare}</span></button>
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-primary mud-ripple" title="Copy code" onclick="pmSnippets.copyCode(${idx})"><span class="mud-icon-button-label">${iconCopy}</span></button>
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-info mud-ripple" title="Chỉnh sửa" onclick="pmSnippets.openEdit(${s.id})"><span class="mud-icon-button-label">${iconEdit}</span></button>
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-primary mud-ripple" title="Xem chi tiết" onclick="pmSnippets.openView(${idx})"><span class="mud-icon-button-label">${iconView}</span></button>
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-primary mud-ripple" title="Toàn màn hình" onclick="pmSnippets.openFullscreen(${idx})"><span class="mud-icon-button-label">${iconFullscreen}</span></button>
+                            <div class="mud-spacer"></div>
+                            ${revokeRestoreBtn}
+                            <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-error mud-ripple" title="Xóa" onclick="pmSnippets.deleteSnippet(${s.id})"><span class="mud-icon-button-label">${iconDelete}</span></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('') +
+        '</div>';
+
+        if (window.hljs) { document.querySelectorAll('.pm-code-preview code').forEach(el => hljs.highlightElement(el)); }
+    },
+
+    openCreate() {
+        document.getElementById('snip-create-title').value = '';
+        document.getElementById('snip-create-code').value = '';
+        this._createLang = 'csharp';
+        this._expiryVal = 'never';
+        document.getElementById('snip-create-lang-label').textContent = 'csharp';
+        this._renderExpiryOptions();
+        this._renderLangMenus();
+        const createOverlay = document.getElementById('pm-snippet-create-overlay');
+        if (createOverlay.parentNode !== document.body) document.body.appendChild(createOverlay);
+        createOverlay.style.display = 'flex';
+    },
+    closeCreate() {
+        document.getElementById('pm-snippet-create-overlay').style.display = 'none';
+    },
+
+    async createSnippet() {
+        const title = document.getElementById('snip-create-title').value.trim();
+        const content = document.getElementById('snip-create-code').value;
+        if (!content) { pmToast.error('Vui lòng nhập code'); return; }
+        const body = { title, language: this._createLang, content, expirationOption: this._expiryVal };
+        const r = await pmApi.post('/api/snippets', body);
+        if (r) { this.closeCreate(); pmToast.success('Đã tạo snippet'); this.init(); }
+    },
+
+    openEdit(id) {
+        const s = this._items.find(x => x.id === id);
+        if (!s) return;
+        this._editId = id;
+        this._editLang = s.language || 'plaintext';
+        document.getElementById('snip-edit-title').value = s.title || '';
+        document.getElementById('snip-edit-code').value = s.content || s.code || '';
+        document.getElementById('snip-edit-lang-label').textContent = this._editLang;
+        this._renderLangMenus();
+        const editOverlay = document.getElementById('pm-snippet-edit-overlay');
+        if (editOverlay.parentNode !== document.body) document.body.appendChild(editOverlay);
+        editOverlay.style.display = 'flex';
+    },
+    closeEdit() {
+        document.getElementById('pm-snippet-edit-overlay').style.display = 'none';
+    },
+
+    async updateSnippet() {
+        const title = document.getElementById('snip-edit-title').value.trim();
+        const content = document.getElementById('snip-edit-code').value;
+        if (!content) { pmToast.error('Vui lòng nhập code'); return; }
+        const body = { title, language: this._editLang, content };
+        const r = await pmApi.put('/api/snippets/' + this._editId, body);
+        if (r) { this.closeEdit(); pmToast.success('Đã cập nhật snippet'); this.init(); }
+    },
+
+    openView(idx) {
+        const filtered = this._getFiltered();
+        const s = filtered[idx];
+        if (!s) return;
+        this._viewItem = s;
+        document.getElementById('snip-view-title').textContent = s.title || 'Snippet';
+        document.getElementById('snip-view-lang').textContent = s.language || '';
+        document.getElementById('snip-view-lang-chip').textContent = s.language || '';
+        const codeEl = document.getElementById('snip-view-code');
+        codeEl.textContent = s.content || s.code || '';
+        codeEl.className = 'language-' + (s.language || 'plaintext');
+        // Move overlay to body so it escapes pm-main-content stacking context
+        const viewOverlay = document.getElementById('pm-snippet-view-overlay');
+        if (viewOverlay.parentNode !== document.body) document.body.appendChild(viewOverlay);
+        viewOverlay.style.display = 'flex';
+        if (window.hljs) hljs.highlightElement(codeEl);
+    },
+    closeView() {
+        document.getElementById('pm-snippet-view-overlay').style.display = 'none';
+    },
+    copyViewingCode() {
+        if (this._viewItem) {
+            navigator.clipboard.writeText(this._viewItem.content || this._viewItem.code || '');
+            pmToast.success('Đã copy code');
+        }
+    },
+
+    openFullscreen(idx) {
+        const filtered = this._getFiltered();
+        const s = filtered[idx];
+        if (!s) return;
+        this._fsItem = s;
+        document.getElementById('snip-fs-title').textContent = s.title || 'Code snippet';
+        document.getElementById('snip-fs-lang').textContent = s.language || '';
+        const codeEl = document.getElementById('snip-fs-code');
+        codeEl.textContent = s.content || s.code || '';
+        codeEl.className = 'language-' + (s.language || 'plaintext');
+        // Move overlay to body so it escapes pm-main-content stacking context
+        const overlay = document.getElementById('pm-snippet-fullscreen-overlay');
+        if (overlay.parentNode !== document.body) document.body.appendChild(overlay);
+        overlay.style.display = 'flex';
+        if (window.hljs) hljs.highlightElement(codeEl);
+    },
+    closeFullscreen() {
+        document.getElementById('pm-snippet-fullscreen-overlay').style.display = 'none';
+    },
+    copyFullscreenCode() {
+        if (this._fsItem) {
+            navigator.clipboard.writeText(this._fsItem.content || this._fsItem.code || '');
+            pmToast.success('Đã copy code');
+        }
+    },
+
+    copyCode(idx) {
+        const filtered = this._getFiltered();
+        const s = filtered[idx];
+        if (s) { navigator.clipboard.writeText(s.content || s.code || ''); pmToast.success('Đã copy code'); }
+    },
+
+    async shareLink(token) {
+        if (!token) { pmToast.error('Snippet này không có link chia sẻ'); return; }
+        const url = `${location.origin}/snippets/share/${token}`;
+        await navigator.clipboard.writeText(url);
+        pmToast.success('Đã copy link chia sẻ');
+    },
+
+    async revoke(id) {
+        const r = await pmApi.post('/api/snippets/' + id + '/revoke', {});
+        if (r !== null) { pmToast.success('Đã thu hồi link'); this.init(); }
+    },
+    async restore(id) {
+        const r = await pmApi.post('/api/snippets/' + id + '/restore', {});
+        if (r !== null) { pmToast.success('Đã khôi phục link'); this.init(); }
+    },
+    async deleteSnippet(id) {
+        if (!confirm('Bạn có chắc muốn xóa snippet này?')) return;
+        const r = await pmApi.delete('/api/snippets/' + id);
+        if (r !== null) { pmToast.success('Đã xóa snippet'); this.init(); }
+    }
+};
+document.addEventListener('DOMContentLoaded', () => pmSnippets.init());
+</script>
+}
