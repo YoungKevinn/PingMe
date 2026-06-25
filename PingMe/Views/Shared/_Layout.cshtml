@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1D4ED8" />
+    <title>PingMe</title>
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+    <!-- Syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- MudBlazor -->
+    <link href="/css/MudBlazor.min.css" rel="stylesheet" />
+    <!-- PingMe custom styles -->
+    <link href="/css/app.css" rel="stylesheet" asp-append-version="true" />
+    <link href="/css/site.css" rel="stylesheet" asp-append-version="true" />
+
+    @RenderSection("Styles", required: false)
+</head>
+<body data-mud-theme="default" id="pm-body">
+<script>try{
+  if(localStorage.getItem('pm_dark')==='1'){document.body.setAttribute('data-mud-theme','dark');}
+  if(localStorage.getItem('pm_sidebar')==='0'){
+    document.addEventListener('DOMContentLoaded',function(){
+      var sb=document.getElementById('pm-left-sidebar');
+      var mc=document.getElementById('pm-main-content');
+      if(sb){sb.style.transform='translateX(-264px)';}
+      if(mc){mc.style.left='0';}
+    });
+  }
+}catch(e){}</script>
+
+<!-- TOPBAR -->
+<header class="pm-topbar" style="position:fixed;top:0;left:0;right:0;height:64px;z-index:3000;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;
+    background:linear-gradient(135deg,#1D4ED8,#2563EB);
+    color:white;
+    border-bottom:1px solid rgba(255,255,255,.12);
+    box-shadow:0 6px 18px rgba(15,23,42,.18);">
+
+    <div style="display:flex;align-items:center;gap:12px;height:100%;min-width:0;white-space:nowrap;">
+        <!-- Menu toggle -->
+        <button type="button" id="pm-menu-toggle"
+                class="mud-button-root mud-icon-button mud-icon-button-color-inherit mud-ripple mud-icon-button mud-icon-button-color-inherit mud-ripple-size-medium"
+                style="color:white;"
+                onclick="pmLayout.toggleDrawer()">
+            <span class="mud-icon-button-label">
+                <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+            </span>
+        </button>
+
+        <!-- Brand / Logo -->
+        <a href="/chat" style="display:inline-flex;align-items:center;gap:10px;height:40px;cursor:pointer;text-decoration:none;color:white;">
+            <div style="width:34px;height:34px;min-width:34px;border-radius:10px;
+                        background:rgba(255,255,255,.18);
+                        display:flex;align-items:center;justify-content:center;">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:18px;color:white;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                </span>
+            </div>
+            <span style="font-size:1.22rem;font-weight:800;line-height:1;letter-spacing:-.01em;font-family:'Inter',system-ui,sans-serif;white-space:nowrap;">
+                PingMe
+            </span>
+        </a>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:4px;height:100%;flex-shrink:0;">
+        <!-- Dark mode toggle -->
+        <button type="button" id="pm-theme-toggle" title="Chuyển theme" data-i18n-title="account.theme"
+                class="mud-button-root mud-icon-button mud-icon-button-size-medium"
+                style="color:white;" onclick="pmLayout.toggleTheme()">
+            <span class="mud-icon-button-label">
+                <span id="pm-theme-icon" class="mud-icon-root mud-svg-icon" style="font-size:24px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
+                </span>
+            </span>
+        </button>
+
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <!-- Language toggle -->
+            <button type="button" title="Ngôn ngữ" data-i18n-title="account.language"
+                    class="mud-button-root mud-icon-button mud-icon-button-color-inherit mud-ripple mud-icon-button mud-icon-button-color-inherit mud-ripple-size-medium"
+                    style="color:white;" onclick="pmLayout.toggleLanguage()">
+            <span class="mud-icon-button-label">
+                <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2 0 .68.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2 0-.68.07-1.35.16-2h4.68c.09.65.16 1.32.16 2 0 .68-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2 0-.68-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg>
+            </span>
+        </button>
+
+            <!-- Profile -->
+            <a href="/profile" title="Tài khoản" data-i18n-title="account.profile"
+               class="mud-button-root mud-icon-button mud-icon-button-color-inherit mud-ripple mud-icon-button mud-icon-button-color-inherit mud-ripple-size-medium"
+               style="color:white;">
+            <span class="mud-icon-button-label">
+                <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            </span>
+        </a>
+
+            <!-- Logout -->
+            <form method="post" action="/auth/logout" style="display:inline;">
+                @Html.AntiForgeryToken()
+                <button type="submit" title="Đăng xuất" data-i18n-title="account.logout"
+                        class="mud-button-root mud-icon-button mud-icon-button-color-inherit mud-ripple mud-icon-button mud-icon-button-color-inherit mud-ripple-size-medium"
+                        style="color:white;background:none;border:none;cursor:pointer;">
+            <span class="mud-icon-button-label">
+                <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+            </span>
+        </button>
+            </form>
+        }
+    </div>
+</header>
+
+<!-- LEFT SIDEBAR -->
+<nav id="pm-left-sidebar" class="pm-side-nav-shell expanded"
+     style="position:fixed;left:0;top:64px;bottom:0;width:264px;z-index:2000;
+            overflow-x:hidden;overflow-y:auto;
+            background:var(--mud-palette-surface);
+            color:var(--mud-palette-drawer-text);
+            border-right:1px solid var(--mud-palette-divider);
+            box-sizing:border-box;
+            transition:transform .25s ease;">
+
+    <div class="mud-nav-menu pm-nav-menu" style="padding-top:18px;">
+
+        @{
+            var currentPath = Context.Request.Path.Value?.ToLower() ?? "";
+        }
+
+        @* Messages *@
+        <a href="/chat" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/chat") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" id="nav-label-chat" data-i18n="nav.messages">Tin nhắn</span>
+            <span class="pm-nav-badge-slot" id="pm-nav-badge-msg-slot" style="display:none;margin-left:auto;">
+                <span class="pm-nav-badge" id="pm-nav-badge-msg"></span>
+            </span>
+        </a>
+
+        @* Groups *@
+        <a href="/groups" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/groups") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.groups">Nhóm</span>
+        </a>
+
+        @* Search *@
+        <a href="/search" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/search") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.search">Tìm kiếm</span>
+        </a>
+
+        @* Saved *@
+        <a href="/saved" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/saved") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.saved">Đã lưu</span>
+        </a>
+
+        @* Friends *@
+        <a href="/friends" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/friends") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.friends">Bạn bè</span>
+            <span class="pm-nav-badge-slot" id="pm-nav-badge-friends-slot" style="display:none;margin-left:auto;">
+                <span class="pm-nav-badge" id="pm-nav-badge-friends"></span>
+            </span>
+        </a>
+
+        @* Snippets *@
+        <a href="/snippets" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/snippets") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.code">Code</span>
+        </a>
+
+        @* IOC *@
+        <a href="/ioc" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/ioc") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.ioc">IOC</span>
+            <span class="pm-nav-badge-slot" id="pm-nav-badge-ioc-slot" style="display:none;margin-left:auto;">
+                <span class="pm-nav-badge" id="pm-nav-badge-ioc"></span>
+            </span>
+        </a>
+
+        @* Pentest *@
+        <a href="/pentest" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/pentest") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.pentest">Pentest</span>
+            <span class="pm-nav-badge-slot" id="pm-nav-badge-pentest-slot" style="display:none;margin-left:auto;">
+                <span class="pm-nav-badge" id="pm-nav-badge-pentest"></span>
+            </span>
+        </a>
+
+        @* Timeline *@
+        <a href="/timeline" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/timeline") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.timeline">Dòng thời gian</span>
+        </a>
+
+        @* Tasks *@
+        <a href="/tasks" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/tasks") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 5.18 10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44A9.9 9.9 0 0 0 12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.tasks">Công việc</span>
+            <span class="pm-nav-badge-slot" id="pm-nav-badge-tasks-slot" style="display:none;margin-left:auto;">
+                <span class="pm-nav-badge" id="pm-nav-badge-tasks"></span>
+            </span>
+        </a>
+
+        @* Webhooks — ẩn khỏi nav (không có trong bản gốc) *@
+        @*
+        <a href="/webhooks" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/webhooks") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.webhooks">Webhook</span>
+        </a>
+        *@
+
+        @* Secrets *@
+        <a href="/secrets" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/secrets") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.secrets">Secret</span>
+        </a>
+
+        <hr class="mud-divider" style="margin:12px;border-color:var(--mud-palette-divider);" />
+
+        @* Blocked *@
+        <a href="/blocked" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/blocked") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.68L5.68 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.68L18.32 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.blocked">Đã chặn</span>
+        </a>
+
+        @* Sessions *@
+        <a href="/sessions" class="mud-nav-link pm-nav-item @(currentPath.StartsWith("/sessions") ? "mud-nav-link-active active" : "")"
+           style="margin:4px 12px;border-radius:13px;min-height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;text-decoration:none;color:inherit;">
+            <span class="mud-nav-link-icon">
+                <span class="mud-icon-root mud-svg-icon" style="font-size:20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/></svg>
+                </span>
+            </span>
+            <span class="mud-nav-link-text pm-nav-label" data-i18n="nav.sessions">Phiên đăng nhập</span>
+        </a>
+    </div>
+
+    <!-- Sidebar resize handle -->
+    <div id="pm-sidebar-resize-handle"
+         style="position:absolute;top:0;right:0;width:14px;height:100%;cursor:col-resize;z-index:5000;background:transparent;"
+         onmousedown="pmLayout.startSidebarResize(event)">
+        <div style="position:absolute;top:0;right:0;width:3px;height:100%;background:rgba(59,130,246,0);transition:background .15s;"></div>
+    </div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main id="pm-main-content" style="position:fixed;top:64px;left:264px;right:0;bottom:0;overflow:auto;
+     background:var(--mud-palette-background);color:var(--mud-palette-text-primary);
+     transition:left .25s ease;">
+    @RenderBody()
+</main>
+
+<!-- Toast notification area -->
+<div id="pm-toast-container" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
+
+<!-- Inject JWT from server-side claims so JS never needs to read the pm_token cookie -->
+@if (User.Identity?.IsAuthenticated == true)
+{
+    var _jwt = User.FindFirstValue("token") ?? "";
+    <script>window.__pmJwt = '@_jwt';</script>
+}
+
+<!-- Dialogs -->
+@if (User.Identity?.IsAuthenticated == true)
+{
+    @await Html.PartialAsync("Dialogs/_AddGroupMemberDialog")
+    @await Html.PartialAsync("Dialogs/_EditGroupDialog")
+    @await Html.PartialAsync("Dialogs/_EditHistoryDialog")
+    @await Html.PartialAsync("Dialogs/_GroupMembersDialog")
+    @await Html.PartialAsync("Dialogs/_NicknameDialog")
+    @await Html.PartialAsync("Dialogs/_SharedFilesDialog")
+    @await Html.PartialAsync("_CallOverlay")
+}
+
+<!-- MudBlazor -->
+<script src="/js/MudBlazor.min.js"></script>
+<!-- SignalR -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+<!-- Highlight.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!-- PingMe scripts -->
+<script src="/js/api.js" asp-append-version="true"></script>
+<script src="/js/loc.js" asp-append-version="true"></script>
+<script src="/js/layout.js" asp-append-version="true"></script>
+<script src="/js/chatScroll.js" asp-append-version="true"></script>
+<script src="/js/dialogs.js" asp-append-version="true"></script>
+<script src="/js/webrtc.js" asp-append-version="true"></script>
+
+<!-- Global Confirm Dialog -->
+<div id="pm-confirm-dialog" class="mud-overlay" style="display:none;z-index:3000;background:var(--mud-palette-overlay-dark);position:fixed;inset:0;align-items:center;justify-content:center;">
+    <div class="mud-dialog mud-paper mud-elevation-24" style="width:400px;max-width:90%;border-radius:12px;background:var(--mud-palette-surface);overflow:hidden;">
+        <div class="mud-dialog-title" style="padding:16px 24px;">
+            <h6 id="pm-confirm-title" class="mud-typography mud-typography-h6" style="margin:0;">Xác nhận</h6>
+        </div>
+        <div class="mud-dialog-content" style="padding:0 24px 20px;">
+            <p id="pm-confirm-message" class="mud-typography mud-typography-body1" style="color:var(--mud-palette-text-secondary);margin:0;">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+        </div>
+        <div class="mud-dialog-actions" style="padding:8px;display:flex;justify-content:flex-end;gap:8px;">
+            <button type="button" onclick="pmDialogs.closeConfirm(false)" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple text-none">Hủy</button>
+            <button type="button" onclick="pmDialogs.closeConfirm(true)" class="mud-button-root mud-button mud-button-filled mud-button-filled-error mud-ripple text-none">Xóa</button>
+        </div>
+    </div>
+</div>
+
+@RenderSection("Scripts", required: false)
+
+</body>
+</html>

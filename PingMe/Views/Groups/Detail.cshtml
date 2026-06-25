@@ -1,0 +1,27 @@
+@using System.Security.Claims
+@{
+    ViewData["Title"] = "Quản lý nhóm - PingMe";
+    var groupId = ViewBag.GroupId as int? ?? 0;
+    var myId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var _uid) ? _uid : 0;
+}
+
+@section Styles {
+    <link href="/css/group-detail.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div style="height:100%;overflow-y:auto;padding:24px;background:var(--mud-palette-background);">
+    <div class="pm-group-page">
+        <div id="gd-root">
+            <div class="pm-center-loading">
+                <div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:40px;height:40px;">
+                    <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>window.__gd = { groupId: @groupId, myId: @myId };</script>
+    <script src="/js/groupDetail.js" asp-append-version="true"></script>
+}

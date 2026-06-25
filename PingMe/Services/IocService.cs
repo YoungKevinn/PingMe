@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PingMe.Data;
 using PingMe.DTOs.Ioc;
 using PingMe.Models;
@@ -96,7 +96,7 @@ public class IocService : IIocService
         }
 
         if (await duplicateQuery.AnyAsync())
-            return (null, "IOC này đã tồn tại trong phạm vi hiện tại.");
+            return (null, "IOC n�y d� t?n t?i trong ph?m vi hi?n t?i.");
 
         var ioc = new IocIndicator
         {
@@ -178,7 +178,7 @@ public class IocService : IIocService
             duplicateQuery = duplicateQuery.Where(i => i.CreatedByUserId == userId);
 
         if (await duplicateQuery.AnyAsync())
-            return "IOC này đã tồn tại trong phạm vi hiện tại.";
+            return "IOC n�y d� t?n t?i trong ph?m vi hi?n t?i.";
 
         return null;
     }
@@ -263,10 +263,10 @@ public class IocService : IIocService
         var ioc = await _db.IocIndicators.FirstOrDefaultAsync(i => i.Id == id);
 
         if (ioc is null)
-            return (null, "IOC không tồn tại.");
+            return (null, "IOC kh�ng t?n t?i.");
 
         if (!await CanManageIocAsync(userId, ioc))
-            return (null, "Bạn không có quyền chỉnh sửa IOC này.");
+            return (null, "B?n kh�ng c� quy?n ch?nh s?a IOC n�y.");
 
         if (!string.IsNullOrWhiteSpace(request.Type) || !string.IsNullOrWhiteSpace(request.Value))
         {
@@ -289,7 +289,7 @@ public class IocService : IIocService
                 duplicateQuery = duplicateQuery.Where(x => x.CreatedByUserId == userId);
 
             if (await duplicateQuery.AnyAsync())
-                return (null, "IOC này đã tồn tại trong phạm vi hiện tại.");
+                return (null, "IOC n�y d� t?n t?i trong ph?m vi hi?n t?i.");
 
             ioc.Type = normalized.Type;
             ioc.Value = normalized.Value;
@@ -325,12 +325,12 @@ public class IocService : IIocService
         var ioc = await _db.IocIndicators.FirstOrDefaultAsync(i => i.Id == id);
 
         if (ioc is null)
-            return (false, "IOC không tồn tại.");
+            return (false, "IOC kh�ng t?n t?i.");
 
         if (!await CanManageIocAsync(userId, ioc))
-            return (false, "Bạn không có quyền xóa IOC này.");
+            return (false, "B?n kh�ng c� quy?n x�a IOC n�y.");
 
-        _db.IocIndicators.Remove(ioc);
+        ioc.IsDeleted = true;
         await _db.SaveChangesAsync();
 
         return (true, null);
@@ -344,10 +344,10 @@ public class IocService : IIocService
         var ioc = await _db.IocIndicators.FirstOrDefaultAsync(i => i.Id == id);
 
         if (ioc is null)
-            return (null, "IOC không tồn tại.");
+            return (null, "IOC kh�ng t?n t?i.");
 
         if (!await CanManageIocAsync(userId, ioc))
-            return (null, "Bạn không có quyền cập nhật IOC này.");
+            return (null, "B?n kh�ng c� quy?n c?p nh?t IOC n�y.");
 
         var normalizedStatus = NormalizeStatus(status);
 
@@ -367,6 +367,7 @@ public class IocService : IIocService
             .Select(gm => gm.GroupId);
 
         return _db.IocIndicators.Where(i =>
+            !i.IsDeleted &&
             (i.GroupId.HasValue && groupIds.Contains(i.GroupId.Value)) ||
             (!i.GroupId.HasValue &&
                 (i.CreatedByUserId == userId || i.PeerUserId == userId)));
@@ -397,7 +398,7 @@ public class IocService : IIocService
         int? peerUserId)
     {
         if (groupId.HasValue && peerUserId.HasValue)
-            return (false, "IOC chỉ được gắn với group hoặc DM, không được chọn cả hai.");
+            return (false, "IOC ch? du?c g?n v?i group ho?c DM, kh�ng du?c ch?n c? hai.");
 
         if (groupId.HasValue)
         {
@@ -406,18 +407,18 @@ public class IocService : IIocService
                 gm.UserId == userId);
 
             if (!isMember)
-                return (false, "Bạn không còn là thành viên nhóm nên không thể tạo IOC cho nhóm này.");
+                return (false, "B?n kh�ng c�n l� th�nh vi�n nh�m n�n kh�ng th? t?o IOC cho nh�m n�y.");
         }
 
         if (peerUserId.HasValue)
         {
             if (peerUserId.Value == userId)
-                return (false, "PeerUserId không hợp lệ.");
+                return (false, "PeerUserId kh�ng h?p l?.");
 
             var peerExists = await _db.Users.AnyAsync(u => u.Id == peerUserId.Value);
 
             if (!peerExists)
-                return (false, "Người dùng DM không tồn tại.");
+                return (false, "Ngu?i d�ng DM kh�ng t?n t?i.");
         }
 
         return (true, null);
@@ -441,7 +442,7 @@ public class IocService : IIocService
     private static (bool Success, string Type, string Value, string Severity, string Description, string? Error) ParseCommand(string? rawCommand)
     {
         if (string.IsNullOrWhiteSpace(rawCommand))
-            return (false, string.Empty, string.Empty, "Medium", string.Empty, "Command IOC rỗng.");
+            return (false, string.Empty, string.Empty, "Medium", string.Empty, "Command IOC r?ng.");
 
         var match = IocCommandRegex.Match(rawCommand.Trim());
 
@@ -454,7 +455,7 @@ public class IocService : IIocService
                 return (true, missingValueMatch.Groups["type"].Value.Trim(), string.Empty, "Medium", string.Empty, null);
             }
 
-            return (false, string.Empty, string.Empty, "Medium", string.Empty, "Cú pháp IOC không hợp lệ. Ví dụ: /ioc cve CVE-2025-70149");
+            return (false, string.Empty, string.Empty, "Medium", string.Empty, "C� ph�p IOC kh�ng h?p l?. V� d?: /ioc cve CVE-2025-70149");
         }
 
         var type = match.Groups["type"].Value.Trim();
@@ -495,7 +496,7 @@ public class IocService : IIocService
         var value = rawValue?.Trim() ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(value))
-            return (false, type, value, "Giá trị IOC không được để trống.");
+            return (false, type, value, "Gi� tr? IOC kh�ng du?c d? tr?ng.");
 
         if (type == "HASH")
         {
@@ -504,7 +505,7 @@ public class IocService : IIocService
             else if (Sha256Regex.IsMatch(value))
                 type = "SHA256";
             else
-                return (false, type, value, "Hash không hợp lệ. Hỗ trợ MD5 hoặc SHA256.");
+                return (false, type, value, "Hash kh�ng h?p l?. H? tr? MD5 ho?c SHA256.");
         }
 
         if (type == "CVE")
@@ -512,41 +513,41 @@ public class IocService : IIocService
             var match = CveRegex.Match(value);
 
             if (!match.Success || !value.StartsWith("CVE-", StringComparison.OrdinalIgnoreCase))
-                return (false, type, value, "CVE không hợp lệ. Ví dụ: /ioc cve CVE-2025-70149");
+                return (false, type, value, "CVE kh�ng h?p l?. V� d?: /ioc cve CVE-2025-70149");
 
             value = $"CVE-{match.Groups["year"].Value}-{match.Groups["id"].Value}";
         }
         else if (type == "IP")
         {
             if (!Ipv4Regex.IsMatch(value))
-                return (false, type, value, "IPv4 không hợp lệ.");
+                return (false, type, value, "IPv4 kh�ng h?p l?.");
         }
         else if (type == "MD5")
         {
             if (!Md5Regex.IsMatch(value))
-                return (false, type, value, "MD5 không hợp lệ.");
+                return (false, type, value, "MD5 kh�ng h?p l?.");
         }
         else if (type == "SHA256")
         {
             if (!Sha256Regex.IsMatch(value))
-                return (false, type, value, "SHA256 không hợp lệ.");
+                return (false, type, value, "SHA256 kh�ng h?p l?.");
         }
         else if (type == "URL")
         {
             if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
-                return (false, type, value, "URL không hợp lệ.");
+                return (false, type, value, "URL kh�ng h?p l?.");
             }
         }
         else if (type == "DOMAIN")
         {
             if (!DomainRegex.IsMatch(value))
-                return (false, type, value, "Domain không hợp lệ.");
+                return (false, type, value, "Domain kh�ng h?p l?.");
         }
         else
         {
-            return (false, type, value, "Loại IOC không được hỗ trợ.");
+            return (false, type, value, "Lo?i IOC kh�ng du?c h? tr?.");
         }
 
         return (true, type, value, null);
@@ -616,14 +617,43 @@ public class IocService : IIocService
 
     private async Task<List<IocResponse>> MapListAsync(List<IocIndicator> items)
     {
-        var result = new List<IocResponse>();
+        if (items.Count == 0) return new List<IocResponse>();
 
-        foreach (var item in items)
+        // Gom tên nhóm & tên người chat thành 2 truy vấn (thay vì 2 truy vấn cho mỗi IOC — N+1)
+        var groupIds = items.Where(i => i.GroupId.HasValue).Select(i => i.GroupId!.Value).Distinct().ToList();
+        var peerIds  = items.Where(i => i.PeerUserId.HasValue).Select(i => i.PeerUserId!.Value).Distinct().ToList();
+
+        var groupNames = groupIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.Groups.AsNoTracking().Where(g => groupIds.Contains(g.Id))
+                .ToDictionaryAsync(g => g.Id, g => g.Name);
+
+        var peerNames = peerIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.Users.AsNoTracking().Where(u => peerIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.DisplayName);
+
+        return items.Select(ioc => new IocResponse
         {
-            result.Add(await MapAsync(item));
-        }
-
-        return result;
+            Id = ioc.Id,
+            Type = ioc.Type,
+            Value = ioc.Value,
+            Description = ioc.Description,
+            Severity = ioc.Severity,
+            Status = ioc.Status,
+            Source = ioc.Source,
+            Tags = ioc.Tags,
+            CreatedByUserId = ioc.CreatedByUserId,
+            MessageId = ioc.MessageId,
+            PeerUserId = ioc.PeerUserId,
+            PeerDisplayName = ioc.PeerUserId.HasValue && peerNames.TryGetValue(ioc.PeerUserId.Value, out var pn) ? pn : null,
+            GroupId = ioc.GroupId,
+            GroupName = ioc.GroupId.HasValue && groupNames.TryGetValue(ioc.GroupId.Value, out var gn) ? gn : null,
+            ExternalUrl = BuildExternalUrl(ioc.Type, ioc.Value),
+            CreatedAt = ioc.CreatedAt,
+            UpdatedAt = ioc.UpdatedAt,
+            ResolvedAt = ioc.ResolvedAt
+        }).ToList();
     }
 
     private async Task<IocResponse> MapAsync(IocIndicator ioc)
@@ -670,3 +700,4 @@ public class IocService : IIocService
         };
     }
 }
+

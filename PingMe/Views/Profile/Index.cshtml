@@ -1,0 +1,98 @@
+@{
+    ViewData["Title"] = "Hồ sơ - PingMe";
+}
+
+@section Styles {
+    <link href="/css/profile.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div style="height:100%;overflow-y:auto;padding:24px 16px;background:var(--mud-palette-background);">
+    <div class="pm-profile-page-title">
+        <p class="pm-page-title">Hồ sơ cá nhân</p>
+        <p class="pm-page-subtitle">Xem thông tin tài khoản nội bộ của bạn</p>
+    </div>
+
+    <div id="pm-profile-root">
+        <div style="display:flex;justify-content:center;padding:40px;">
+            <div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:40px;height:40px;">
+                <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit profile modal -->
+<div id="pm-edit-modal" class="pm-profile-modal-backdrop" style="display:none;" onclick="if(event.target===this)pmProfile.closeEdit()">
+    <div class="pm-profile-modal-card" onclick="event.stopPropagation()">
+        <div class="pm-profile-modal-header">
+            <div>
+                <h6>Chỉnh sửa hồ sơ</h6>
+                <p class="sub">Cập nhật thông tin hiển thị trong PingMe.</p>
+            </div>
+            <button type="button" class="pm-profile-modal-close" onclick="pmProfile.closeEdit()">×</button>
+        </div>
+        <div class="pm-profile-modal-body">
+            <div class="pm-edit-avatar-row">
+                <label for="pm-avatar-upload" class="pm-edit-avatar-button">
+                    <div class="pm-edit-avatar" id="pm-edit-avatar-inner"></div>
+                    <span class="pm-edit-avatar-camera"><svg viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg></span>
+                </label>
+                <div>
+                    <label for="pm-avatar-upload" class="pm-avatar-upload-btn"><svg viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg> Đổi ảnh đại diện</label>
+                    <input type="file" id="pm-avatar-upload" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="pmProfile.onAvatarSelected(this)" />
+                    <div class="pm-avatar-selected" id="pm-edit-avatar-selected"></div>
+                </div>
+            </div>
+
+            <div class="pm-edit-grid">
+                <div class="pm-field"><label>Tên hiển thị</label><input type="text" id="pm-edit-displayname" /></div>
+                <div class="pm-field"><label>Email</label><input type="text" id="pm-edit-email" disabled /></div>
+                <div class="pm-field"><label>Chức vụ</label><input type="text" id="pm-edit-jobtitle" /></div>
+                <div class="pm-field"><label>Bộ phận / Team</label><input type="text" id="pm-edit-department" /></div>
+                <div class="pm-field"><label>Vị trí làm việc</label><input type="text" id="pm-edit-worklocation" /></div>
+                <div class="pm-field"><label>Số điện thoại</label><input type="text" id="pm-edit-phone" /></div>
+                <div class="pm-field"><label>Ngày sinh</label><input type="date" id="pm-edit-dob" /></div>
+                <div class="pm-field"><label>Username</label><input type="text" id="pm-edit-username" disabled /></div>
+                <div class="pm-field pm-field-full"><label>Giới thiệu</label><textarea id="pm-edit-bio" placeholder="Giới thiệu về bản thân..."></textarea></div>
+            </div>
+        </div>
+        <div class="pm-profile-modal-actions">
+            <button type="button" class="pm-btn text" onclick="pmProfile.closeEdit()">Hủy</button>
+            <button type="button" class="pm-btn filled" onclick="pmProfile.openConfirmSave()">Tiếp tục</button>
+        </div>
+    </div>
+</div>
+
+<!-- Change password modal -->
+<div id="pm-password-modal" class="pm-profile-modal-backdrop confirm" style="display:none;" onclick="if(event.target===this)pmProfile.closePassword()">
+    <div class="pm-confirm-card" onclick="event.stopPropagation()" style="max-width:420px;">
+        <div class="pm-confirm-icon"><svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>
+        <h6>Đổi mật khẩu</h6>
+        <div style="width:100%;margin-top:16px;text-align:left;">
+            <div class="pm-field"><label>Mật khẩu hiện tại</label><input type="password" id="pm-pw-cur" /></div>
+            <div class="pm-field"><label>Mật khẩu mới (tối thiểu 6 ký tự)</label><input type="password" id="pm-pw-new" /></div>
+            <div class="pm-field"><label>Xác nhận mật khẩu mới</label><input type="password" id="pm-pw-confirm" /></div>
+        </div>
+        <div class="pm-confirm-actions">
+            <button type="button" class="pm-btn text" onclick="pmProfile.closePassword()">Hủy</button>
+            <button type="button" class="pm-btn filled" onclick="pmProfile.changePassword()">Đổi mật khẩu</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm save modal -->
+<div id="pm-confirm-modal" class="pm-profile-modal-backdrop confirm" style="display:none;" onclick="if(event.target===this)pmProfile.closeConfirmSave()">
+    <div class="pm-confirm-card" onclick="event.stopPropagation()">
+        <div class="pm-confirm-icon"><svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg></div>
+        <h6>Xác nhận cập nhật hồ sơ?</h6>
+        <p style="margin:8px 0 0;font-size:.85rem;color:var(--mud-palette-text-secondary);">Các thay đổi của bạn sẽ được lưu vào tài khoản PingMe.</p>
+        <div class="pm-confirm-actions">
+            <button type="button" class="pm-btn text" onclick="pmProfile.closeConfirmSave()">Quay lại</button>
+            <button type="button" class="pm-btn filled" onclick="pmProfile.save()">Xác nhận lưu</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="/js/profile.js" asp-append-version="true"></script>
+}

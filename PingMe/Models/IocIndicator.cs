@@ -1,4 +1,4 @@
-﻿namespace PingMe.Models;
+namespace PingMe.Models;
 
 public class IocIndicator
 {
@@ -31,4 +31,6 @@ public class IocIndicator
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? ResolvedAt { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
 }

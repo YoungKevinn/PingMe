@@ -1,0 +1,326 @@
+@{
+    ViewData["Title"] = "Công việc - PingMe";
+}
+
+<div class="mud-container mud-container-maxwidth-false" style="padding:26px 28px 32px;">
+    <div class="d-flex align-center justify-space-between mb-4 flex-wrap" style="gap:16px;">
+        <div>
+            <h5 class="mud-typography mud-typography-h5 font-weight-bold" style="color:var(--mud-palette-text-primary); margin:0;" data-i18n="task.title">Công việc</h5>
+            <p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-primary); margin:0;" data-i18n="task.subtitle">Quản lý công việc và theo dõi tiến độ.</p>
+        </div>
+        <div class="d-flex" style="gap:8px;">
+            <button type="button" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-ripple" onclick="pmTasks.loadAsync()" id="btn-refresh" style="height:36px;">
+                <span class="mud-button-label">
+                    <span class="mud-icon-root mud-svg-icon mud-button-icon-start" style="width:18px;height:18px;"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></span>
+                    <span data-i18n="common.refresh">Làm mới</span>
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <div class="mb-4" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <input type="search" id="filter-keyword" data-i18n-placeholder="task.search" placeholder="Tìm kiếm task..." oninput="pmTasks.debounceLoad()" style="height:38px; border:1px solid var(--mud-palette-divider); border-radius:8px; padding:0 10px; background:var(--mud-palette-surface); color:var(--mud-palette-text-primary); outline:none; min-width:150px; flex:1 1 150px; max-width:220px;" />
+        <select id="filter-group" onchange="pmTasks.onGroupFilterChanged()" style="height:38px; border:1px solid var(--mud-palette-divider); border-radius:8px; padding:0 10px; background:var(--mud-palette-surface); color:var(--mud-palette-text-primary); outline:none; min-width:120px;">
+            <option value="" data-i18n="common.allGroups">Tất cả nhóm</option>
+        </select>
+        <select id="filter-assignee" disabled style="height:38px; border:1px solid var(--mud-palette-divider); border-radius:8px; padding:0 10px; background:var(--mud-palette-surface); color:var(--mud-palette-text-primary); outline:none; min-width:130px;">
+            <option value="" data-i18n="common.allAssignees">Tất cả người được</option>
+        </select>
+        <select id="filter-status" style="height:38px; border:1px solid var(--mud-palette-divider); border-radius:8px; padding:0 10px; background:var(--mud-palette-surface); color:var(--mud-palette-text-primary); outline:none; min-width:140px;">
+            <option value="" data-i18n="common.allStatuses">Tất cả trạng thái</option>
+            <option value="Open">Open</option>
+            <option value="InProgress">In Progress</option>
+            <option value="Done">Done</option>
+            <option value="Cancelled">Cancelled</option>
+        </select>
+        <select id="filter-priority" style="height:38px; border:1px solid var(--mud-palette-divider); border-radius:8px; padding:0 10px; background:var(--mud-palette-surface); color:var(--mud-palette-text-primary); outline:none; min-width:140px;">
+            <option value="" data-i18n="common.allPriorities">Tất cả mức độ</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+        </select>
+        <label style="display:flex; align-items:center; gap:6px; color:var(--mud-palette-text-secondary); font-size:.86rem; white-space:nowrap; cursor:pointer;"><input type="checkbox" id="filter-assignedToMe" /> <span data-i18n="common.assignedToMe">Giao cho tôi</span></label>
+        <label style="display:flex; align-items:center; gap:6px; color:var(--mud-palette-text-secondary); font-size:.86rem; white-space:nowrap; cursor:pointer;"><input type="checkbox" id="filter-overdue" /> <span data-i18n="common.overdue">Quá hạn</span></label>
+        <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" onclick="pmTasks.loadAsync()" style="height:38px; padding:0 20px;"><span class="mud-button-label" data-i18n="common.apply">Áp dụng</span></button>
+    </div>
+
+    <div id="tasks-container">
+        <!-- JS render -->
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmTasks = {
+    groups: [],
+    members: [],
+    timer: null,
+    highlightId: new URLSearchParams(window.location.search).get('taskId'),
+
+    async init() {
+        await this.loadGroupsAsync();
+        await this.loadAsync();
+    },
+
+    debounceLoad() {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.loadAsync(), 400);
+    },
+
+    async loadGroupsAsync() {
+        this.groups = await pmApi.get('/api/groups') || [];
+        const sel = document.getElementById('filter-group');
+        sel.innerHTML = '<option value="" data-i18n="common.allGroups">Tất cả nhóm</option>';
+        this.groups.forEach(g => {
+            const o = document.createElement('option');
+            o.value = g.id;
+            o.textContent = g.name;
+            sel.appendChild(o);
+        });
+    },
+
+    async onGroupFilterChanged() {
+        const groupId = document.getElementById('filter-group').value;
+        const assigneeSel = document.getElementById('filter-assignee');
+        assigneeSel.innerHTML = '<option value="" data-i18n="common.allAssignees">Tất cả người được giao</option>';
+        
+        if (!groupId) {
+            assigneeSel.disabled = true;
+            return;
+        }
+
+        assigneeSel.disabled = true;
+        const groupData = await pmApi.get('/api/groups/' + groupId);
+        this.members = groupData?.members || [];
+        this.members.forEach(m => {
+            const o = document.createElement('option');
+            o.value = m.userId;
+            o.textContent = m.displayName;
+            assigneeSel.appendChild(o);
+        });
+        assigneeSel.disabled = false;
+    },
+
+    async resetFiltersAsync() {
+        document.getElementById('filter-keyword').value = '';
+        document.getElementById('filter-group').value = '';
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-priority').value = '';
+        document.getElementById('filter-assignedToMe').checked = false;
+        document.getElementById('filter-overdue').checked = false;
+        await this.onGroupFilterChanged();
+        await this.loadAsync();
+    },
+
+    async loadAsync() {
+        const container = document.getElementById('tasks-container');
+        container.innerHTML = `<div class="d-flex flex-column align-center justify-center" style="min-height:260px;"><div class="mud-progress-circular mud-primary-text mud-progress-medium mud-progress-indeterminate" role="progressbar"><svg class="mud-progress-circular-svg" viewBox="22 22 44 44"><circle class="mud-progress-circular-circle mud-progress-indeterminate" cx="44" cy="44" r="20" fill="none" stroke-width="3"></circle></svg></div><p class="mud-typography mud-typography-body1 mt-4 mud-text-secondary">Đang tải dữ liệu...</p></div>`;
+        
+        const q = new URLSearchParams({ pageSize: 50, page: 1 });
+        const kw = document.getElementById('filter-keyword').value;
+        const gid = document.getElementById('filter-group').value;
+        const uid = document.getElementById('filter-assignee').value;
+        const st = document.getElementById('filter-status').value;
+        const pr = document.getElementById('filter-priority').value;
+        const me = document.getElementById('filter-assignedToMe').checked;
+        const ov = document.getElementById('filter-overdue').checked;
+
+        if (kw) q.set('keyword', kw);
+        if (gid) q.set('groupId', gid);
+        if (uid) q.set('assignedToUserId', uid);
+        if (st) q.set('status', st);
+        if (pr) q.set('priority', pr);
+        if (me) q.set('assignedToMe', true);
+        if (ov) q.set('overdue', true);
+
+        const res = await pmApi.get('/api/tasks?' + q.toString());
+        const items = res?.items || [];
+
+        if (!items.length) {
+            container.innerHTML = '<div class="d-flex flex-column align-center justify-center mud-text-secondary" style="min-height:260px;"><svg class="mud-icon-root mud-svg-icon mud-icon-size-large" focusable="false" viewBox="0 0 24 24" aria-hidden="true" style="font-size:3rem;opacity:.5;"><path d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"></path></svg><span class="mud-typography mud-typography-body1 mt-3" data-i18n="task.empty">Chưa có task nào.</span></div>';
+            return;
+        }
+
+        container.innerHTML = '<div class="mud-grid mud-grid-spacing-xs-3">' + items.map(task => {
+            const cssKey = (val) => (val || 'none').toLowerCase().trim().replace(' ', '');
+            const isCompleted = cssKey(task.status) === 'done' || cssKey(task.status) === 'completed';
+            const isCancelled = cssKey(task.status) === 'cancelled';
+            const dueDt = task.dueAtUtc ? new Date(task.dueAtUtc) : null;
+            const isOverdue = dueDt && dueDt < new Date() && !isCompleted && !isCancelled;
+            
+            const getPriorityColor = p => {
+                const lp = cssKey(p);
+                if(lp === 'critical') return '#DC2626';
+                if(lp === 'high') return '#F97316';
+                if(lp === 'medium') return '#2563EB';
+                if(lp === 'low') return '#16A34A';
+                return '#2563EB';
+            };
+
+            const getStatusChipClass = s => {
+                const ls = cssKey(s);
+                if(ls === 'open') return 'mud-chip-color-default';
+                if(ls === 'inprogress') return 'mud-chip-color-info';
+                if(ls === 'done' || ls === 'completed') return 'mud-chip-color-success';
+                if(ls === 'cancelled') return 'mud-chip-color-default';
+                return 'mud-chip-color-default';
+            };
+
+            return `<div class="mud-grid-item mud-grid-item-xs-12 mud-grid-item-sm-6 mud-grid-item-md-4 mud-grid-item-lg-3 d-flex">
+                <div class="mud-paper mud-elevation-1 mud-card" style="width:100%; display:flex; flex-direction:column; border-left:4px solid ${getPriorityColor(task.priority)}; ${task.id == this.highlightId ? 'outline:2px solid #2563EB;' : ''}">
+                    <div class="mud-card-content">
+                        <div class="d-flex align-center flex-wrap" style="gap:8px; margin-bottom:12px;">
+                            <div class="mud-chip mud-chip-filled mud-chip-size-small mud-chip-color-primary"><span class="mud-chip-content">${pmEscape(task.priority || 'Medium')}</span></div>
+                            <div class="mud-chip mud-chip-filled mud-chip-size-small ${getStatusChipClass(task.status)}"><span class="mud-chip-content">${pmEscape(task.status || 'Open')}</span></div>
+                            ${isOverdue ? `<div class="mud-chip mud-chip-filled mud-chip-size-small mud-chip-color-error"><span class="mud-chip-content" data-i18n="common.overdue">Quá hạn</span></div>` : ''}
+                        </div>
+                        <h6 class="mud-typography mud-typography-h6" style="font-size:1rem; font-weight:600; line-height:1.35; margin-bottom:8px;">${pmEscape(task.title)}</h6>
+                        ${task.description ? `<p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-text-secondary); white-space:pre-wrap; margin-bottom:12px;">${pmEscape(task.description)}</p>` : ''}
+                        <div class="mud-typography mud-typography-body2 d-flex flex-column" style="color:var(--mud-palette-text-secondary); font-size:0.8rem; gap:4px;">
+                            <span>Nhóm: ${pmEscape(task.groupName)}</span>
+                            <span>Tạo bởi: ${pmEscape(task.createdByDisplayName)}</span>
+                            <span>Phụ trách: ${pmEscape(task.assignedToDisplayName || 'Chưa phân công')}</span>
+                            ${dueDt ? `<span>Hạn chót: ${pmFmt.time(task.dueAtUtc)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="mud-card-actions d-flex align-center" style="margin-top:auto; padding-top:0;">
+                        ${!isCompleted 
+                            ? `<button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-primary mud-ripple" onclick="pmTasks.completeAsync(${task.id}, true)"><span class="mud-button-label">Hoàn thành</span></button>` 
+                            : `<button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-primary mud-ripple" onclick="pmTasks.completeAsync(${task.id}, false)"><span class="mud-button-label">Mở lại</span></button>`}
+                        <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-error mud-ripple ml-auto" onclick="pmTasks.deleteAsync(${task.id})"><span class="mud-button-label">Xóa</span></button>
+                    </div>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+        
+        if (typeof pmLoc !== 'undefined' && pmLoc.apply) pmLoc.apply(container);
+    },
+
+    async completeAsync(id, isCompleted) {
+        let r;
+        if (isCompleted) {
+            r = await pmApi.patch('/api/tasks/' + id + '/complete', { isCompleted: true });
+        } else {
+            r = await pmApi.patch('/api/tasks/' + id + '/complete', { isCompleted: false });
+        }
+        if (r) {
+            pmToast.success(isCompleted ? 'Đã hoàn thành' : 'Đã mở lại');
+            this.loadAsync();
+        }
+    },
+
+    async deleteAsync(id) {
+        if (!confirm('Bạn có chắc chắn muốn xóa task này?')) return;
+        const r = await pmApi.delete('/api/tasks/' + id);
+        if (r) {
+            pmToast.success('Đã xóa task');
+            this.loadAsync();
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => pmTasks.init());
+
+pmTasks.openCreate = function() {
+    const modal = document.getElementById('pm-task-create-modal');
+    if (!modal) return;
+    if (modal.parentNode !== document.body) document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    document.getElementById('tc-title').value = '';
+    document.getElementById('tc-desc').value = '';
+    document.getElementById('tc-priority').value = 'Medium';
+    document.getElementById('tc-status').value = 'Open';
+    document.getElementById('tc-due').value = '';
+    const gs = document.getElementById('tc-group');
+    gs.innerHTML = '<option value="">-- Chọn nhóm --</option>';
+    pmTasks.groups.forEach(g => {
+        const o = document.createElement('option');
+        o.value = g.id; o.textContent = g.name;
+        gs.appendChild(o);
+    });
+};
+pmTasks.closeCreate = function() {
+    const modal = document.getElementById('pm-task-create-modal');
+    if (modal) modal.style.display = 'none';
+};
+pmTasks.submitCreate = async function() {
+    const title = document.getElementById('tc-title').value.trim();
+    if (!title) { pmToast.error('Vui lòng nhập tiêu đề'); return; }
+    const groupId = document.getElementById('tc-group').value;
+    if (!groupId) { pmToast.error('Vui lòng chọn nhóm'); return; }
+    const body = {
+        title,
+        description: document.getElementById('tc-desc').value,
+        priority: document.getElementById('tc-priority').value,
+        status: document.getElementById('tc-status').value,
+        groupId: parseInt(groupId),
+        dueAtUtc: document.getElementById('tc-due').value || null
+    };
+    const r = await pmApi.post('/api/tasks', body);
+    if (r) { pmToast.success('Đã tạo công việc'); pmTasks.closeCreate(); await pmTasks.loadAsync(); }
+};
+</script>
+}
+
+<!-- Create Task Modal -->
+<div id="pm-task-create-modal" style="display:none;position:fixed;inset:0;z-index:250000;background:rgba(2,6,23,.58);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;" onclick="if(event.target===this)pmTasks.closeCreate()">
+    <div class="mud-paper mud-elevation-4" style="width:min(520px,100%);border-radius:16px;display:flex;flex-direction:column;background:var(--mud-palette-surface);">
+        <div class="d-flex justify-space-between align-center" style="padding:16px 24px; border-bottom:1px solid var(--mud-palette-divider);">
+            <div>
+                <h6 class="mud-typography mud-typography-h6" style="margin:0;font-weight:700;color:var(--mud-palette-text-primary);">Tạo công việc mới</h6>
+            </div>
+            <button type="button" class="mud-button-root mud-icon-button mud-ripple" onclick="pmTasks.closeCreate()" style="color:var(--mud-palette-text-secondary);">
+                <span class="mud-icon-button-label">
+                    <svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </span>
+            </button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:16px;">
+            <div>
+                <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Tiêu đề *</label>
+                <input type="text" id="tc-title" placeholder="Nhập tiêu đề công việc..." style="width:100%; height:40px; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:0 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none;" />
+            </div>
+            <div>
+                <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Nhóm *</label>
+                <select id="tc-group" style="width:100%; height:40px; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:0 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none;"><option value="">-- Chọn nhóm --</option></select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div>
+                    <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Ưu tiên</label>
+                    <select id="tc-priority" style="width:100%; height:40px; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:0 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none;">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Trạng thái</label>
+                    <select id="tc-status" style="width:100%; height:40px; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:0 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none;">
+                        <option value="Open" selected>Open</option>
+                        <option value="InProgress">In Progress</option>
+                        <option value="Done">Done</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Hạn chót (tùy chọn)</label>
+                <input type="datetime-local" id="tc-due" style="width:100%; height:40px; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:0 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none;" />
+            </div>
+            <div>
+                <label class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom:4px; display:block;">Mô tả</label>
+                <textarea id="tc-desc" rows="3" placeholder="Mô tả công việc..." style="width:100%; border:1px solid var(--mud-palette-divider); border-radius:4px; padding:8px 12px; background:transparent; color:var(--mud-palette-text-primary); outline:none; resize:vertical;"></textarea>
+            </div>
+        </div>
+        <div class="d-flex justify-end" style="padding:16px 24px; border-top:1px solid var(--mud-palette-divider); gap:8px;">
+            <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" onclick="pmTasks.closeCreate()">
+                <span class="mud-button-label">Hủy</span>
+            </button>
+            <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" onclick="pmTasks.submitCreate()">
+                <span class="mud-button-label">Tạo task</span>
+            </button>
+        </div>
+    </div>
+</div>

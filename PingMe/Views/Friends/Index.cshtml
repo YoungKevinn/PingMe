@@ -1,0 +1,338 @@
+@{
+    ViewData["Title"] = "Bạn bè - PingMe";
+}
+
+<style>
+    .pm-friends-page { min-height: 100vh; padding: 26px 28px 40px; background: var(--mud-palette-background); color: var(--mud-palette-text-primary); }
+    .pm-friends-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .pm-friends-heading h2 { margin: 0; font-size: 1.6rem; font-weight: 900; }
+
+    .pm-friends-search-card { border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; }
+    .pm-friends-search-label { margin: 0 0 10px; font-size: .85rem; font-weight: 700; }
+    .pm-friends-search-wrap { position: relative; }
+    .pm-friends-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--mud-palette-text-secondary); display: flex; pointer-events: none; }
+    .pm-friends-search-input {
+        width: 100%; height: 46px; padding: 0 14px 0 42px;
+        border: 1.5px solid var(--mud-palette-lines-inputs); border-radius: 12px;
+        background: transparent; color: var(--mud-palette-text-primary);
+        font-size: .95rem; outline: none; box-sizing: border-box;
+        transition: border-color .2s, box-shadow .2s;
+    }
+    .pm-friends-search-input:focus { border-color: var(--mud-palette-primary); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+    .pm-friends-search-input::placeholder { color: var(--mud-palette-text-secondary); }
+
+    .pm-friends-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--mud-palette-divider); margin-bottom: 18px; }
+    .pm-friends-tab {
+        padding: 10px 24px; border: none; background: none; cursor: pointer;
+        font-size: .82rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+        color: var(--mud-palette-text-secondary); border-bottom: 2px solid transparent;
+        margin-bottom: -2px; border-radius: 8px 8px 0 0; transition: .15s;
+    }
+    .pm-friends-tab.active { color: var(--mud-palette-primary); border-bottom-color: var(--mud-palette-primary); background: rgba(37,99,235,.06); }
+
+    .pm-friends-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    @@media (max-width: 768px) { .pm-friends-grid { grid-template-columns: 1fr; } }
+
+    .pm-friend-card { border-radius: 14px; height: 100%; display: flex; flex-direction: column; }
+    .pm-friend-row { display: flex; gap: 12px; align-items: center; width: 100%; }
+    .pm-friend-info { flex: 1; min-width: 0; }
+    .pm-friend-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+    .pm-friend-avatar {
+        position: relative; overflow: hidden; font-weight: 800; flex-shrink: 0;
+        background: linear-gradient(135deg, #2563EB, #3B82F6) !important; color: white !important;
+    }
+    .pm-friend-avatar-img { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; border-radius: 999px; background: transparent; }
+    .pm-avatar-initial { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; font-weight: 900; color: white; text-transform: uppercase; }
+    .pm-friend-avatar.pm-avatar-fallback-active .pm-avatar-initial { z-index: 3; }
+</style>
+
+<div class="pm-friends-page">
+
+    <!-- Header — matches old: emoji + plain text -->
+    <div class="pm-friends-heading">
+        <span style="font-size:1.6rem;">👥</span>
+        <h2>Bạn bè</h2>
+    </div>
+
+    <!-- Search — matches old style -->
+    <div class="mud-paper mud-elevation-1 pm-friends-search-card">
+        <p class="pm-friends-search-label">🔍 Tìm bạn mới</p>
+        <div class="pm-friends-search-wrap">
+            <span class="pm-friends-search-icon">
+                <svg style="width:18px;height:18px;fill:currentColor;" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            </span>
+            <input type="text" id="friend-search-input" class="pm-friends-search-input"
+                   placeholder="Nhập tên, username, email..." autocomplete="off"
+                   oninput="pmFriends.searchUsers(this.value)"
+                   onfocus="this.style.borderColor='var(--mud-palette-primary)';this.style.boxShadow='0 0 0 3px rgba(59,130,246,.12)'"
+                   onblur="this.style.borderColor='var(--mud-palette-lines-inputs)';this.style.boxShadow='none'" />
+        </div>
+        <div id="pm-user-search-results" style="display:none;margin-top:10px;"></div>
+    </div>
+
+    <!-- Tabs — uppercase like old project -->
+    <div class="pm-friends-tabs">
+        <button id="tab-friends" class="pm-friends-tab active" onclick="pmFriends.switchTab('friends')">BẠN BÈ</button>
+        <button id="tab-pending" class="pm-friends-tab" onclick="pmFriends.switchTab('pending')">LỜI MỜI NHẬN</button>
+        <button id="tab-sent" class="pm-friends-tab" onclick="pmFriends.switchTab('sent')">LỜI MỜI GỬI</button>
+    </div>
+
+    <!-- Content -->
+    <div id="pm-friends-list">
+        <div style="text-align:center;padding:40px;">
+            <div class="mud-progress-circular mud-progress-circular-indeterminate mud-progress-circular-color-primary" style="width:40px;height:40px;margin:0 auto;">
+                <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmFriends = {
+    currentTab: 'friends',
+    searchTimer: null,
+    friendIds: new Set(),
+    sentIds: new Set(),
+
+    async init() {
+        await this.refreshExcludeSets();
+        this.switchTab('friends');
+    },
+
+    // Preload friend + sent IDs so search can filter existing friends / disable sent
+    async refreshExcludeSets() {
+        try {
+            const [friends, sent] = await Promise.all([
+                pmApi.getSilent('/api/friends'),
+                pmApi.getSilent('/api/friends/sent')
+            ]);
+            this.friendIds = new Set((friends || []).map(f => f.userId || f.id));
+            this.sentIds = new Set((sent || []).map(r => r.toUserId).filter(x => x != null));
+        } catch (e) { /* non-fatal */ }
+    },
+
+    switchTab(tab) {
+        this.currentTab = tab;
+        ['friends','pending','sent'].forEach(t => {
+            const btn = document.getElementById('tab-' + t);
+            if (!btn) return;
+            if (t === tab) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        this.loadTab(tab);
+    },
+
+    async loadTab(tab) {
+        const list = document.getElementById('pm-friends-list');
+        list.innerHTML = '<div style="text-align:center;padding:32px;"><div class="mud-progress-circular mud-progress-circular-indeterminate mud-progress-circular-color-primary" style="width:40px;height:40px;margin:0 auto;"><svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg></div></div>';
+
+        let data = [];
+        if (tab === 'friends') {
+            data = await pmApi.get('/api/friends') || [];
+            this.renderFriends(data);
+        } else if (tab === 'pending') {
+            data = await pmApi.get('/api/friends/requests') || [];
+            this.renderPending(data);
+        } else if (tab === 'sent') {
+            data = await pmApi.get('/api/friends/sent') || [];
+            this.renderSent(data);
+        }
+    },
+
+    _avatar(avatarUrl, name) {
+        const initial = (name || '?')[0].toUpperCase();
+        return `<div class="mud-avatar mud-avatar-medium mud-avatar-filled mud-avatar-filled-primary pm-friend-avatar">
+            ${avatarUrl ? `<img src="${pmApi.backendUrl}${avatarUrl}" alt="${pmEscape(name)}" class="pm-friend-avatar-img" onerror="this.style.display='none'; this.parentElement.classList.add('pm-avatar-fallback-active');">` : ''}
+            <span class="pm-avatar-initial">${initial}</span>
+        </div>`;
+    },
+
+    renderFriends(friends) {
+        const list = document.getElementById('pm-friends-list');
+        if (!friends.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-info"><div class="mud-alert-message">Bạn chưa có bạn bè nào.</div></div>';
+            return;
+        }
+        let html = '<div class="pm-friends-grid">';
+        friends.forEach(f => {
+            const name = f.displayName || f.username;
+            const online = f.isOnline ? '🟢 Online' : '⚫ Offline';
+            html += `
+            <div class="mud-paper mud-elevation-1 mud-card pm-friend-card">
+                <div class="mud-card-content">
+                    <div class="pm-friend-row">
+                        ${this._avatar(f.avatarUrl, name)}
+                        <div class="pm-friend-info">
+                            <p class="mud-typography mud-typography-body1 pm-friend-name">${pmEscape(name)}</p>
+                            <p class="mud-typography mud-typography-caption" style="margin:0;color:var(--mud-palette-text-secondary);">${online}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mud-card-actions">
+                    <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-primary mud-ripple" onclick="location.href='/chat?peerId=${f.userId || f.id}'">
+                        <span class="mud-button-label">💬 Nhắn tin</span>
+                    </button>
+                    <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-error mud-ripple" onclick="pmFriends.unfriend(${f.userId || f.id},'${pmEscape(name)}')">
+                        <span class="mud-button-label">❌ Xóa bạn</span>
+                    </button>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+        list.innerHTML = html;
+    },
+
+    renderPending(reqs) {
+        const list = document.getElementById('pm-friends-list');
+        if (!reqs.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-info"><div class="mud-alert-message">Không có lời mời nào.</div></div>';
+            return;
+        }
+        let html = `
+        <div class="mud-table mud-elevation-1">
+            <div class="mud-table-container">
+                <table class="mud-table-root">
+                    <thead class="mud-table-head">
+                        <tr class="mud-table-row">
+                            <th class="mud-table-cell">Người gửi</th>
+                            <th class="mud-table-cell">Thời gian</th>
+                            <th class="mud-table-cell"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="mud-table-body">`;
+        
+        reqs.forEach(r => {
+            const name = r.fromUserDisplayName || r.fromUserName || r.fromUser?.displayName || 'Người dùng';
+            const time = r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+            html += `
+                        <tr class="mud-table-row mud-table-row-hover">
+                            <td class="mud-table-cell">${pmEscape(name)}</td>
+                            <td class="mud-table-cell">${time}</td>
+                            <td class="mud-table-cell">
+                                <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-success mud-ripple" onclick="pmFriends.accept(${r.id})">
+                                    <span class="mud-icon-button-label"><svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg></span>
+                                </button>
+                                <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-error mud-ripple" onclick="pmFriends.decline(${r.id})">
+                                    <span class="mud-icon-button-label"><svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span>
+                                </button>
+                            </td>
+                        </tr>`;
+        });
+        html += `   </tbody>
+                </table>
+            </div>
+        </div>`;
+        list.innerHTML = html;
+    },
+
+    renderSent(reqs) {
+        const list = document.getElementById('pm-friends-list');
+        if (!reqs.length) {
+            list.innerHTML = '<div class="mud-alert mud-alert-filled mud-alert-filled-info"><div class="mud-alert-message">Chưa gửi lời mời nào.</div></div>';
+            return;
+        }
+        let html = `
+        <div class="mud-table mud-elevation-1">
+            <div class="mud-table-container">
+                <table class="mud-table-root">
+                    <thead class="mud-table-head">
+                        <tr class="mud-table-row">
+                            <th class="mud-table-cell">Người nhận</th>
+                            <th class="mud-table-cell">Thời gian</th>
+                            <th class="mud-table-cell"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="mud-table-body">`;
+        
+        reqs.forEach(r => {
+            const name = r.toUserDisplayName || r.toUserName || r.toUser?.displayName || 'Người dùng';
+            const time = r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+            html += `
+                        <tr class="mud-table-row mud-table-row-hover">
+                            <td class="mud-table-cell">${pmEscape(name)}</td>
+                            <td class="mud-table-cell">${time}</td>
+                            <td class="mud-table-cell">
+                                <button type="button" class="mud-button-root mud-icon-button mud-icon-button-color-warning mud-ripple" onclick="pmFriends.cancel(${r.id})">
+                                    <span class="mud-icon-button-label"><svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg></span>
+                                </button>
+                            </td>
+                        </tr>`;
+        });
+        html += `   </tbody>
+                </table>
+            </div>
+        </div>`;
+        list.innerHTML = html;
+    },
+
+    searchUsers(q) {
+        clearTimeout(this.searchTimer);
+        const box = document.getElementById('pm-user-search-results');
+        if (!q || q.length < 2) { box.style.display = 'none'; return; }
+        this.searchTimer = setTimeout(async () => {
+            const results = await pmApi.get(`/api/search?q=${encodeURIComponent(q)}&type=user`) || {};
+            let users = results.users || results.items || (Array.isArray(results) ? results : []);
+            // Filter out users who are already friends (match original behavior)
+            users = users.filter(u => !pmFriends.friendIds.has(u.id));
+            if (!users.length) {
+                box.style.display = 'block';
+                box.innerHTML = `<p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-text-secondary);margin:8px 4px;">Không tìm thấy người dùng nào khớp với "${pmEscape(q)}".</p>`;
+                return;
+            }
+            box.style.display = 'block';
+            box.innerHTML = '<div class="mud-list mud-list-padding mud-list-dense mt-2">' + users.map(u => {
+                const name = pmEscape(u.displayName || u.username);
+                return `
+                <div class="mud-list-item mud-list-item-gutters mud-list-item-clickable mud-ripple">
+                    <div class="mud-list-item-text">
+                        <div class="pm-friend-row">
+                            ${this._avatar(u.avatarUrl, name)}
+                            <div class="pm-friend-info">
+                                <p class="mud-typography mud-typography-body1 pm-friend-name" style="margin:0;">${name}</p>
+                                <p class="mud-typography mud-typography-caption" style="margin:0;color:var(--mud-palette-text-secondary);">@@${pmEscape(u.username)} · ${u.isOnline ? '🟢 Online' : '⚫ Offline'}</p>
+                            </div>
+                            <div class="mud-tooltip-root">
+                                <button type="button" ${pmFriends.sentIds.has(u.id) ? 'disabled' : `onclick="pmFriends.sendRequest(${u.id})"`} class="mud-button-root mud-icon-button mud-icon-button-color-primary mud-ripple" title="${pmFriends.sentIds.has(u.id) ? 'Đã gửi lời mời' : 'Gửi lời mời kết bạn'}" style="${pmFriends.sentIds.has(u.id) ? 'opacity:.5;cursor:default;' : ''}">
+                                    <span class="mud-icon-button-label"><svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('') + '</div>';
+        }, 400);
+    },
+
+    async sendRequest(userId) {
+        const r = await pmApi.post('/api/friends/request', { targetUserId: userId });
+        if (r) {
+            pmToast.success('Đã gửi lời mời kết bạn');
+            this.sentIds.add(userId);
+            document.getElementById('pm-user-search-results').style.display = 'none';
+            document.getElementById('friend-search-input').value = '';
+        }
+    },
+    async accept(reqId) { const r = await pmApi.post(`/api/friends/accept/${reqId}`, {}); if (r) { pmToast.success('Đã chấp nhận lời mời'); this.loadTab('pending'); } },
+    async decline(reqId) { const r = await pmApi.post(`/api/friends/decline/${reqId}`, {}); if (r !== false) { this.loadTab('pending'); } },
+    async cancel(reqId) { const r = await pmApi.delete(`/api/friends/cancel/${reqId}`); if (r !== false) { this.loadTab('sent'); } },
+    async unfriend(userId, name) {
+        const r = await pmApi.delete(`/api/friends/${userId}`);
+        if (r !== false) { pmToast.success('Đã xóa bạn'); this.loadTab('friends'); }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => pmFriends.init());
+
+// Close search when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#friend-search-input') && !e.target.closest('#pm-user-search-results')) {
+        const box = document.getElementById('pm-user-search-results');
+        if (box) box.style.display = 'none';
+    }
+});
+</script>
+}

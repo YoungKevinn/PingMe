@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using PingMe.Data;
@@ -8,7 +9,12 @@ namespace PingMe.Middleware;
 public class JwtRevocationMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly IServiceScopeFactory _scopeFactory; // ✅ Singleton-safe
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    // In-memory cache: tokenHash -> (isValid, cachedAt)
+    // Entries auto-expire after 30 seconds
+    private static readonly ConcurrentDictionary<string, (bool IsValid, DateTime CachedAt)> _tokenCache = new();
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
 
     public JwtRevocationMiddleware(RequestDelegate next, IServiceScopeFactory scopeFactory)
     {
@@ -24,36 +30,68 @@ public class JwtRevocationMiddleware
             var token = authHeader["Bearer ".Length..].Trim();
             var tokenHash = jwtService.HashToken(token);
 
-            // ✅ Query 1: dùng db của request (scoped) — OK
-            var session = await db.UserSessions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.TokenHash == tokenHash);
-
-            if (session is null || session.IsRevoked || session.ExpiresAt < DateTime.UtcNow)
+            // Check cache first — avoid DB round-trip for repeated requests with same token
+            if (_tokenCache.TryGetValue(tokenHash, out var cached) && (DateTime.UtcNow - cached.CachedAt) < CacheDuration)
             {
-                context.Response.StatusCode = 401;
-                await context.Response.WriteAsJsonAsync(
-                    new { message = "Token không hợp lệ hoặc đã bị thu hồi." });
-                return;
+                if (!cached.IsValid)
+                {
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(
+                        new { message = "Token không hợp lệ hoặc đã bị thu hồi." });
+                    return;
+                }
+                // Token is valid and cached — skip DB query
+            }
+            else
+            {
+                // Cache miss or expired — query DB
+                var session = await db.UserSessions
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.TokenHash == tokenHash);
+
+                if (session is null || session.IsRevoked || session.ExpiresAt < DateTime.UtcNow)
+                {
+                    _tokenCache[tokenHash] = (false, DateTime.UtcNow);
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(
+                        new { message = "Token không hợp lệ hoặc đã bị thu hồi." });
+                    return;
+                }
+
+                // Cache valid result
+                _tokenCache[tokenHash] = (true, DateTime.UtcNow);
+
+                // Update LastActive in background (fire-and-forget)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var scope = _scopeFactory.CreateAsyncScope();
+                        var freshDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                        await freshDb.UserSessions
+                            .Where(s => s.TokenHash == tokenHash)
+                            .ExecuteUpdateAsync(s =>
+                                s.SetProperty(x => x.LastActive, DateTime.UtcNow));
+                    }
+                    catch { /* silent */ }
+                });
             }
 
-            // ✅ Update LastActive dùng scope MỚI — không đụng vào db của request
-            _ = Task.Run(async () =>
+            // Periodically clean expired entries (every ~100 requests, non-blocking)
+            if (_tokenCache.Count > 50 && Random.Shared.Next(100) == 0)
             {
-                try
+                _ = Task.Run(() =>
                 {
-                    await using var scope = _scopeFactory.CreateAsyncScope();
-                    var freshDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    await freshDb.UserSessions
-                        .Where(s => s.TokenHash == tokenHash)
-                        .ExecuteUpdateAsync(s =>
-                            s.SetProperty(x => x.LastActive, DateTime.UtcNow));
-                }
-                catch { /* silent */ }
-            });
+                    var cutoff = DateTime.UtcNow - CacheDuration;
+                    foreach (var kvp in _tokenCache)
+                    {
+                        if (kvp.Value.CachedAt < cutoff)
+                            _tokenCache.TryRemove(kvp.Key, out _);
+                    }
+                });
+            }
         }
 
-        // ✅ _next dùng db của request — không còn conflict
         await _next(context);
     }
 }

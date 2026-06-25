@@ -1,0 +1,423 @@
+@{
+    ViewData["Title"] = "IOCs - PingMe";
+}
+
+<style>
+    .pm-ioc-page { min-height: 100vh; padding: 26px 28px 40px; background: var(--mud-palette-background); color: var(--mud-palette-text-primary); }
+    .pm-ioc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 18px; }
+    .pm-ioc-header h2 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: -0.03em; color: var(--mud-palette-text-primary) !important; }
+    .pm-ioc-header p { margin: 6px 0 0; color: var(--mud-palette-text-secondary) !important; font-size: 14px; }
+    
+    .pm-ioc-filter-grid { display: grid; grid-template-columns: minmax(260px, 2fr) minmax(130px, .8fr) minmax(150px, .9fr) minmax(170px, .9fr) auto; gap: 12px; align-items: end; }
+    .pm-ioc-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .pm-ioc-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .pm-ioc-field-full { grid-column: 1 / -1; }
+    .pm-ioc-field label { color: var(--mud-palette-text-secondary) !important; font-size: 12px; font-weight: 800; letter-spacing: .02em; }
+    .pm-ioc-field input, .pm-ioc-field select, .pm-ioc-field textarea { width: 100%; min-height: 42px; border-radius: 12px; border: 1px solid var(--mud-palette-divider); background: var(--mud-palette-background); color: var(--mud-palette-text-primary) !important; padding: 0 12px; outline: none; font-size: 14px; box-sizing: border-box; }
+    .pm-ioc-field textarea { padding: 10px 12px; resize: vertical; line-height: 1.5; }
+    .pm-ioc-field input::placeholder, .pm-ioc-field textarea::placeholder { color: var(--mud-palette-text-secondary); opacity: .8; }
+    .pm-ioc-field input:focus, .pm-ioc-field select:focus, .pm-ioc-field textarea:focus { border-color: var(--mud-palette-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, .14); }
+    .pm-ioc-filter-actions { display: flex; gap: 8px; align-items: center; }
+    .pm-ioc-loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 58px; color: var(--mud-palette-text-secondary); }
+    .pm-ioc-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    
+    .pm-ioc-modal-backdrop { position: fixed; inset: 0; z-index: 250000; background: rgba(2, 6, 23, .58); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .pm-ioc-modal-card { width: min(860px, 100%); max-height: calc(100vh - 48px); overflow: hidden; background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border: 1px solid var(--mud-palette-divider); border-radius: 20px; box-shadow: 0 24px 80px rgba(0, 0, 0, .45); display: flex; flex-direction: column; }
+    .pm-ioc-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 20px 24px 12px; border-bottom: 1px solid var(--mud-palette-divider); }
+    .pm-ioc-modal-header h3 { margin: 0; font-size: 20px; font-weight: 900; color: var(--mud-palette-text-primary) !important; }
+    .pm-ioc-modal-header p { margin: 5px 0 0; color: var(--mud-palette-text-secondary) !important; font-size: 13px; }
+    .pm-ioc-modal-close { width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--mud-palette-text-secondary); font-size: 30px; line-height: 1; cursor: pointer; }
+    .pm-ioc-modal-close:hover { background: rgba(148, 163, 184, .16); color: var(--mud-palette-text-primary); }
+    .pm-ioc-modal-body { padding: 18px 24px; overflow: auto; }
+    .pm-ioc-modal-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px 20px; border-top: 1px solid var(--mud-palette-divider); }
+    @@media (max-width: 1100px) { .pm-ioc-filter-grid { grid-template-columns: 1fr 1fr; } .pm-ioc-filter-actions { grid-column: 1 / -1; } .pm-ioc-list { grid-template-columns: 1fr; } }
+    @@media (max-width: 720px) { .pm-ioc-page { padding: 18px 14px 30px; } .pm-ioc-header { flex-direction: column; } .pm-ioc-filter-grid, .pm-ioc-form-grid { grid-template-columns: 1fr; } }
+</style>
+
+<div class="pm-ioc-page">
+    <div class="pm-ioc-header">
+        <div>
+            <h2 data-i18n="ioc.title">Indicators of Compromise</h2>
+            <p data-i18n="ioc.subtitle">Thu thập và phân tích các dấu hiệu xâm phạm (IOCs)</p>
+        </div>
+
+        <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" onclick="pmIoc.openCreate()">
+            <span class="mud-button-label">
+                <span style="margin-right: 4px;">＋</span> <span data-i18n="ioc.addIoc">Thêm IOC</span>
+            </span>
+        </button>
+    </div>
+
+    <div class="mud-paper mud-elevation-1 mud-card" style="margin-bottom: 18px; border-radius: 12px;">
+        <div class="mud-card-content">
+            <div class="pm-ioc-filter-grid">
+                <div class="pm-ioc-field pm-ioc-field-search">
+                    <label data-i18n="ioc.searchLabel">Tìm kiếm IOC</label>
+                    <input type="text" id="filter-keyword" data-i18n-placeholder="ioc.searchPlaceholder" placeholder="Nhập địa chỉ IP, Domain, Hash..." oninput="pmIoc.debounceLoad()" />
+                </div>
+
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.type">Loại IOC</label>
+                    <select id="filter-type" onchange="pmIoc.loadAsync()">
+                        <option value="" data-i18n="common.allTypes">Tất cả loại</option>
+                        <option value="CVE">CVE</option>
+                        <option value="IP">IP</option>
+                        <option value="MD5">MD5</option>
+                        <option value="SHA256">SHA256</option>
+                        <option value="URL">URL</option>
+                        <option value="DOMAIN">DOMAIN</option>
+                    </select>
+                </div>
+
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.severity">Mức độ</label>
+                    <select id="filter-severity" onchange="pmIoc.loadAsync()">
+                        <option value="" data-i18n="common.allSeverities">Tất cả mức độ</option>
+                        <option value="Info">Info</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                </div>
+
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.status">Status</label>
+                    <select id="filter-status" onchange="pmIoc.loadAsync()">
+                        <option value="" data-i18n="common.all">Tất cả</option>
+                        <option value="Open">Open</option>
+                        <option value="Investigating">Investigating</option>
+                        <option value="Resolved">Resolved</option>
+                        <option value="FalsePositive">False Positive</option>
+                    </select>
+                </div>
+
+                <div class="pm-ioc-filter-actions">
+                    <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" onclick="pmIoc.loadAsync()"><span class="mud-button-label" data-i18n="common.filter">Lọc</span></button>
+                    <button type="button" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-default mud-ripple" onclick="pmIoc.resetFilters()"><span class="mud-button-label" data-i18n="common.reset">Reset</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ioc-container">
+        <!-- Rendered by JS -->
+    </div>
+</div>
+
+<div id="pm-ioc-modal" class="pm-ioc-modal-backdrop" style="display:none;" onclick="pmIoc.closeDialog()">
+    <div class="mud-paper mud-elevation-1 mud-card pm-ioc-modal-card" onclick="event.stopPropagation()">
+        <div class="pm-ioc-modal-header">
+            <div>
+                <h3 id="pm-ioc-modal-title" data-i18n="ioc.createTitle">Thêm IOC mới</h3>
+                <p data-i18n="ioc.createSubtitle">Quản lý type, severity, status và mô tả IOC.</p>
+            </div>
+            <button type="button" class="pm-ioc-modal-close" onclick="pmIoc.closeDialog()">×</button>
+        </div>
+
+        <div class="pm-ioc-modal-body">
+            <div class="pm-ioc-form-grid">
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.type">Loại IOC</label>
+                    <select id="f-type" onchange="pmIoc.onTypeChange()">
+                        <option value="CVE">CVE</option><option value="IP">IP</option><option value="MD5">MD5</option><option value="SHA256">SHA256</option><option value="URL">URL</option><option value="DOMAIN">DOMAIN</option>
+                    </select>
+                </div>
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.group">Nhóm</label>
+                    <select id="f-group">
+                        <option value="" data-i18n="common.personal">-- Cá nhân (Personal) --</option>
+                    </select>
+                </div>
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.severity">Mức độ</label>
+                    <select id="f-severity">
+                        <option value="Info">Info</option><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                    </select>
+                </div>
+                <div class="pm-ioc-field">
+                    <label data-i18n="common.status">Status</label>
+                    <select id="f-status">
+                        <option value="Open">Open</option><option value="Investigating">Investigating</option><option value="Resolved">Resolved</option><option value="FalsePositive">False Positive</option>
+                    </select>
+                </div>
+                <div class="pm-ioc-field pm-ioc-field-full">
+                    <label data-i18n="ioc.value">Giá trị (Value) *</label>
+                    <input type="text" id="f-value" placeholder="VD: CVE-2025-70149, 8.8.8.8, domain.com..." oninput="pmIoc.checkForm()"/>
+                </div>
+                <div class="pm-ioc-field pm-ioc-field-full">
+                    <label data-i18n="common.notes">Ghi chú</label>
+                    <textarea id="f-desc" rows="4" data-i18n-placeholder="ioc.notesPlaceholder" placeholder="Ghi chú phân tích, nguồn log, tình trạng xử lý..."></textarea>
+                </div>
+                <div class="pm-ioc-field">
+                    <label>Nguồn (Source)</label>
+                    <input type="text" id="f-source" placeholder="Manual, ChatCommand, Wazuh..." />
+                </div>
+                <div class="pm-ioc-field">
+                    <label>Thẻ (Tags)</label>
+                    <label data-i18n="common.tags">Thẻ (Tags)</label>
+                    <input type="text" id="f-tags" placeholder="malware, brute-force, phishing" />
+                </div>
+            </div>
+        </div>
+
+        <div class="pm-ioc-modal-actions">
+            <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" onclick="pmIoc.closeDialog()"><span class="mud-button-label" data-i18n="common.cancel">Hủy</span></button>
+            <button type="button" id="f-btn-save" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple mud-disabled" disabled onclick="pmIoc.saveAsync()"><span class="mud-button-label" data-i18n="common.save">Lưu</span></button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmIoc = {
+    timer: null,
+    editingId: null,
+    groups: [],
+
+    async init() {
+        this.groups = await pmApi.get('/api/groups') || [];
+        const sel = document.getElementById('f-group');
+        this.groups.forEach(g => {
+            const o = document.createElement('option');
+            o.value = g.id;
+            o.textContent = g.name;
+            sel.appendChild(o);
+        });
+        await this.loadAsync();
+    },
+
+    debounceLoad() {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.loadAsync(), 400);
+    },
+
+    resetFilters() {
+        document.getElementById('filter-keyword').value = '';
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-severity').value = '';
+        document.getElementById('filter-status').value = '';
+        this.loadAsync();
+    },
+
+    async loadAsync() {
+        const listEl = document.getElementById('ioc-container');
+        listEl.innerHTML = '<div class="pm-ioc-loading"><div class="mud-progress-circular mud-primary-text mud-progress-medium mud-progress-indeterminate" role="progressbar"><svg class="mud-progress-circular-svg" viewBox="22 22 44 44"><circle class="mud-progress-circular-circle mud-progress-indeterminate" cx="44" cy="44" r="20" fill="none" stroke-width="3"></circle></svg></div><span style="margin-left:12px;">Đang tải IOC...</span></div>';
+        
+        const q = new URLSearchParams();
+        const kw = document.getElementById('filter-keyword').value;
+        const tp = document.getElementById('filter-type').value;
+        const sv = document.getElementById('filter-severity').value;
+        const st = document.getElementById('filter-status').value;
+
+        if (kw) q.set('keyword', kw);
+        if (tp) q.set('type', tp);
+        if (sv) q.set('severity', sv);
+        if (st) q.set('status', st);
+
+        const items = await pmApi.get('/api/iocs?' + q.toString()) || [];
+        this._cachedItems = items;
+
+        if (!items.length) {
+            listEl.innerHTML = `
+            <div class="mud-paper mud-elevation-0" style="border: 1px dashed var(--mud-palette-divider); padding: 40px 20px; text-align: center; border-radius: 12px; background: transparent;">
+                <div style="font-size: 42px; margin-bottom: 8px;">🛡️</div>
+                <h3 class="mud-typography mud-typography-h6" data-i18n="ioc.emptyStateTitle">Không tìm thấy IOC nào</h3>
+                <p class="mud-typography mud-typography-body2 mud-text-secondary" style="margin-bottom: 12px;" data-i18n="ioc.emptyStateSubtitle">Bạn có thể tạo thủ công tại đây hoặc gửi trong chat bằng cú pháp <b>/ioc</b>.</p>
+                <code style="background: rgba(59, 130, 246, .12); color: var(--mud-palette-primary); padding: 8px 12px; border-radius: 10px; display: inline-block; font-weight: bold;">/ioc cve 2025-70149 high ghi chú kiểm thử</code>
+            </div>`;
+            return;
+        }
+
+        listEl.innerHTML = '<div class="pm-ioc-list">' + items.map(ioc => {
+            const typeLower = (ioc.type||'').toLowerCase();
+            let typeChip = 'mud-chip-color-info';
+            if (typeLower === 'cve') typeChip = 'mud-chip-color-error';
+            else if (typeLower === 'ip' || typeLower === 'domain') typeChip = 'mud-chip-color-primary';
+            else if (typeLower === 'url') typeChip = 'mud-chip-color-success';
+            else if (typeLower === 'md5' || typeLower === 'sha256') typeChip = 'mud-chip-color-secondary';
+
+            const sevLower = (ioc.severity||'').toLowerCase();
+            let sevChip = 'mud-chip-color-default';
+            if (sevLower === 'critical') sevChip = 'mud-chip-color-error';
+            else if (sevLower === 'high') sevChip = 'mud-chip-color-warning';
+            else if (sevLower === 'medium') sevChip = 'mud-chip-color-primary';
+            else if (sevLower === 'low' || sevLower === 'info') sevChip = 'mud-chip-color-default';
+
+            const statLower = (ioc.status||'').toLowerCase();
+            let statChip = 'mud-chip-color-default';
+            if (statLower === 'open') statChip = 'mud-chip-color-warning';
+            else if (statLower === 'investigating') statChip = 'mud-chip-color-primary';
+            else if (statLower === 'resolved') statChip = 'mud-chip-color-success';
+            else if (statLower === 'falsepositive') statChip = 'mud-chip-color-default';
+            
+            const statLbl = ioc.status === 'FalsePositive' ? 'False Positive' : ioc.status;
+            const tags = (ioc.tags || '').split(',').map(x=>x.trim()).filter(x=>x);
+            
+            const urlBtn = ioc.externalUrl ? `<a class="mud-button-root mud-button mud-button-text mud-button-text-primary mud-ripple mud-button-size-small" href="${ioc.externalUrl}" target="_blank" rel="noopener"><span class="mud-button-label">Tra cứu</span></a>` : '';
+            const resolveBtn = ioc.status !== 'Resolved' ? `<button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-success mud-ripple mud-button-size-small" onclick="pmIoc.markResolved(${ioc.id})"><span class="mud-button-label">Resolved</span></button>` : '';
+
+            return `
+            <div class="mud-paper mud-elevation-1 mud-card" style="height: 100%; display: flex; flex-direction: column; border-radius: 12px;">
+                <div class="mud-card-header">
+                    <div class="mud-card-header-content" style="width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: 100%;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                <div class="mud-chip mud-chip-filled mud-chip-size-small ${typeChip}"><span class="mud-chip-content">${pmEscape(ioc.type)}</span></div>
+                                <div class="mud-chip mud-chip-filled mud-chip-size-small ${sevChip}"><span class="mud-chip-content">${pmEscape(ioc.severity)}</span></div>
+                                <div class="mud-chip mud-chip-filled mud-chip-size-small ${statChip}"><span class="mud-chip-content">${pmEscape(statLbl)}</span></div>
+                            </div>
+                            <span class="mud-typography mud-typography-body2 mud-text-secondary" style="white-space: nowrap;">${pmFmt.datetime(ioc.createdAt)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mud-card-content" style="flex: 1; padding-top: 0;">
+                    <div class="mud-typography mud-typography-body1" style="font-family: 'Fira Code', Consolas, monospace; font-weight: 900; word-break: break-all; margin-bottom: 8px;">${pmEscape(ioc.value)}</div>
+                    ${ioc.description ? `<p class="mud-typography mud-typography-body2">${pmEscape(ioc.description)}</p>` : ''}
+                    <div style="display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px;">
+                        <span class="mud-typography mud-typography-caption mud-text-secondary" style="padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, .12);">Source: ${pmEscape(ioc.source)}</span>
+                        ${ioc.groupId ? `<span class="mud-typography mud-typography-caption mud-text-secondary" style="padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, .12);">Group: ${pmEscape(ioc.groupName || '#'+ioc.groupId)}</span>` : ''}
+                        ${ioc.peerUserId ? `<span class="mud-typography mud-typography-caption mud-text-secondary" style="padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, .12);">Peer: ${pmEscape(ioc.peerDisplayName || '#'+ioc.peerUserId)}</span>` : ''}
+                        ${ioc.messageId ? `<span class="mud-typography mud-typography-caption mud-text-secondary" style="padding: 4px 8px; border-radius: 999px; background: rgba(148, 163, 184, .12);">Msg: ${ioc.messageId}</span>` : ''}
+                    </div>
+                    ${tags.length ? `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;">${tags.map(t=>`<span class="mud-typography mud-typography-caption mud-primary-text" style="padding: 4px 8px; border-radius: 999px; background: rgba(59, 130, 246, .12); font-weight: bold;">${pmEscape(t)}</span>`).join('')}</div>` : ''}
+                </div>
+                <div class="mud-card-actions" style="flex-wrap: wrap; border-top: 1px solid var(--mud-palette-divider);">
+                    ${urlBtn}
+                    <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple mud-button-size-small" onclick="pmIoc.openEditById(${ioc.id})"><span class="mud-button-label" data-i18n="common.edit">Sửa</span></button>
+                    ${resolveBtn}
+                    <button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-error mud-ripple mud-button-size-small" onclick="pmIoc.deleteAsync(${ioc.id})"><span class="mud-button-label" data-i18n="common.delete">Xóa</span></button>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+        if (typeof pmLoc !== 'undefined' && pmLoc.apply) pmLoc.apply(listEl);
+    },
+
+    checkForm() {
+        document.getElementById('pm-ioc-save-btn').disabled = !document.getElementById('f-value').value.trim();
+    },
+
+    openCreate() {
+        this.editingId = null;
+        document.getElementById('pm-ioc-modal-title').textContent = 'Thêm IOC mới';
+        document.getElementById('f-type').value = 'IP';
+        document.getElementById('f-severity').value = 'Medium';
+        document.getElementById('f-status').value = 'Open';
+        document.getElementById('f-source').value = 'Manual';
+        document.getElementById('f-value').value = '';
+        document.getElementById('f-desc').value = '';
+        document.getElementById('f-tags').value = '';
+        document.getElementById('f-group').value = '';
+        document.getElementById('pm-ioc-modal').style.display = 'flex';
+        this.checkForm();
+    },
+
+    openEdit(ioc) {
+        this.editingId = ioc.id;
+        document.getElementById('pm-ioc-modal-title').textContent = 'Sửa IOC';
+        document.getElementById('f-type').value = ioc.type || 'IP';
+        document.getElementById('f-severity').value = ioc.severity || 'Medium';
+        document.getElementById('f-status').value = ioc.status || 'Open';
+        document.getElementById('f-source').value = ioc.source || 'Manual';
+        document.getElementById('f-value').value = ioc.value || '';
+        document.getElementById('f-desc').value = ioc.description || '';
+        document.getElementById('f-tags').value = ioc.tags || '';
+        document.getElementById('f-group').value = ioc.groupId || '';
+        document.getElementById('pm-ioc-modal').style.display = 'flex';
+        this.checkForm();
+    },
+
+    _cachedItems: [],
+
+    openEditById(id) {
+        const ioc = this._cachedItems.find(x => x.id === id);
+        if (ioc) this.openEdit(ioc);
+    },
+
+    closeDialog() {
+        document.getElementById('pm-ioc-modal').style.display = 'none';
+        this.editingId = null;
+    },
+
+    async saveAsync() {
+        let value = document.getElementById('f-value').value.trim();
+        const type = document.getElementById('f-type').value;
+
+        // Auto-normalize CVE: "cve2025-70149" / "2025-70149" / "CVE2025-70149" → "CVE-2025-70149"
+        if (type === 'CVE' && value) {
+            value = value.replace(/^cve-?/i, '');
+            if (/^\d{4}-\d{4,7}$/.test(value)) {
+                value = 'CVE-' + value;
+            } else if (/^CVE-\d{4}-\d{4,7}$/i.test(value)) {
+                value = value.toUpperCase();
+            }
+            document.getElementById('f-value').value = value;
+        }
+
+        const body = {
+            type,
+            severity: document.getElementById('f-severity').value,
+            status: document.getElementById('f-status').value,
+            source: document.getElementById('f-source').value,
+            value,
+            description: document.getElementById('f-desc').value,
+            tags: document.getElementById('f-tags').value
+        };
+
+        if (!body.value) return;
+
+        let r;
+        if (this.editingId) {
+            r = await pmApi.put('/api/iocs/' + this.editingId, body);
+        } else {
+            const gid = document.getElementById('f-group').value;
+            if (gid) body.groupId = parseInt(gid);
+            r = await pmApi.post('/api/iocs', body);
+        }
+
+        if (r) {
+            pmToast.success(this.editingId ? 'Đã cập nhật IOC' : 'Đã tạo IOC');
+            if (window.pmLayout && window.pmLayout.loadBadges) window.pmLayout.loadBadges();
+            this.closeDialog();
+            this.loadAsync();
+        }
+    },
+
+    async markResolved(id) {
+        const r = await pmApi.patch('/api/iocs/' + id + '/status', { status: 'Resolved' });
+        if (r) {
+            pmToast.success('Đã chuyển sang Resolved');
+            if (window.pmLayout && window.pmLayout.loadBadges) window.pmLayout.loadBadges();
+            this.loadAsync();
+        }
+    },
+
+    async deleteAsync(id) {
+        const r = await pmApi.delete('/api/iocs/' + id);
+        if (r !== null) {
+            pmToast.success('Đã xóa IOC.');
+            if (window.pmLayout && window.pmLayout.loadBadges) window.pmLayout.loadBadges();
+            this.loadAsync();
+        } else {
+            pmToast.error('Xóa IOC thất bại. Bạn có thể không có quyền xóa IOC này.');
+        }
+    },
+
+    onTypeChange() {
+        const type = document.getElementById('f-type').value;
+        const hints = {
+            CVE:    'VD: CVE-2025-70149 hoặc 2025-70149',
+            IP:     'VD: 192.168.1.1',
+            MD5:    'VD: d41d8cd98f00b204e9800998ecf8427e',
+            SHA256: 'VD: e3b0c44298fc1c149afb...',
+            URL:    'VD: https://malicious.example.com/path',
+            DOMAIN: 'VD: malicious.example.com',
+        };
+        document.getElementById('f-value').placeholder = hints[type] || 'Giá trị IOC';
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => pmIoc.init());
+</script>
+}
+

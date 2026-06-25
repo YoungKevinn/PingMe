@@ -119,12 +119,12 @@ public class TimelineService
                     RelatedId = x.i.Id,
                     MessageId = x.i.MessageId,
                     GroupId = x.i.GroupId,
-                    Title = x.i.Value,
+                    Title = x.i.IsDeleted ? $"{x.i.Value} (Đã xóa)" : x.i.Value,
                     Severity = x.i.Severity,
                     Status = x.i.Status,
                     IocType = x.i.Type,
                     ActionText = "Xem IOC",
-                    ActionUrl = $"/iocs?highlightId={x.i.Id}"
+                    ActionUrl = x.i.IsDeleted ? null : $"/ioc?highlightId={x.i.Id}"
                 });
             }
         }
@@ -160,12 +160,12 @@ public class TimelineService
                     SourceId = f.Id,
                     RelatedId = f.Id,
                     GroupId = f.GroupId,
-                    Title = f.Title,
+                    Title = f.IsDeleted ? $"{f.Title} (Đã xóa)" : f.Title,
                     Severity = f.Severity,
                     Status = f.Status,
                     Endpoint = f.AffectedEndpoint,
                     ActionText = "Xem Finding",
-                    ActionUrl = $"/pentest?findingId={f.Id}"
+                    ActionUrl = f.IsDeleted ? null : $"/pentest?findingId={f.Id}"
                 });
             }
         }

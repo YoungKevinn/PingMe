@@ -153,7 +153,12 @@ public class GroupService : IGroupService
     {
         var group = await _db.Groups.FindAsync(groupId);
         if (group is null || group.IsDeleted) return (false, "Nhóm không tồn tại.");
-        if (group.CreatedByUserId != userId) return (false, "Chỉ người tạo nhóm mới được giải tán.");
+
+        // Admin (gồm người tạo) và Co-admin được giải tán nhóm
+        var role = await GetRoleAsync(groupId, userId);
+        if (role is null) return (false, "Bạn không còn là thành viên của nhóm này.");
+        if (role != GroupMemberRole.Admin && role != GroupMemberRole.CoAdmin)
+            return (false, "Chỉ admin hoặc co-admin mới được giải tán nhóm.");
 
         group.IsDeleted = true;
         group.UpdatedAt = DateTime.UtcNow;
@@ -280,9 +285,11 @@ public class GroupService : IGroupService
 
         if (member.Role == GroupMemberRole.Admin)
         {
+            // Ưu tiên Co-admin lên Admin; nếu không có thì chọn thành viên cũ nhất
             var nextAdmin = await _db.GroupMembers
                 .Where(gm => gm.GroupId == groupId && gm.UserId != userId)
-                .OrderBy(gm => gm.JoinedAt)
+                .OrderByDescending(gm => gm.Role)
+                .ThenBy(gm => gm.JoinedAt)
                 .FirstOrDefaultAsync();
 
             if (nextAdmin != null)
@@ -450,6 +457,7 @@ public class GroupService : IGroupService
             {
                 UserId      = m.UserId,
                 DisplayName = m.User.DisplayName,
+                Username    = m.User.Username,
                 AvatarUrl   = m.User.AvatarUrl,
                 IsOnline    = m.User.IsOnline,
                 Role        = m.Role.ToString(),

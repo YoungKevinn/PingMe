@@ -1,0 +1,121 @@
+@{
+    Layout = "_EmptyLayout";
+    ViewData["Title"] = "Đăng nhập - PingMe";
+}
+
+
+<div class="pm-auth-wrapper">
+    <div class="pm-auth-card">
+        <!-- Logo -->
+        <div class="pm-auth-logo">
+            <div class="pm-auth-logo-icon">
+                <span class="mud-icon-root mud-svg-icon" style="color:white;font-size:32px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                </span>
+            </div>
+            <div class="pm-auth-heading">
+                <p class="pm-auth-title">Chào mừng trở lại</p>
+                <p class="pm-auth-subtitle">Đăng nhập vào PingMe</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ViewBag.Error as string))
+        {
+            <div class="mud-alert mud-alert-filled mud-alert-filled-error" style="margin-bottom:16px;border-radius:10px;padding:12px 16px;">
+                <div class="mud-alert-message">@ViewBag.Error</div>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(ViewBag.Success as string))
+        {
+            <div class="mud-alert mud-alert-filled mud-alert-filled-success" style="margin-bottom:16px;border-radius:10px;padding:12px 16px;">
+                <div class="mud-alert-message">@ViewBag.Success</div>
+            </div>
+        }
+
+        <form id="login-form" method="post" action="/auth/login" onsubmit="return handleLoginSubmit(event)">
+            @Html.AntiForgeryToken()
+
+            <!-- Email field -->
+            <div class="pm-field mb-3">
+                <span class="pm-field-start-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                </span>
+                <input type="email" name="Email" id="email" required
+                       placeholder=" "
+                       class="pm-field-input has-start-icon"
+                       autocomplete="email" />
+                <label class="pm-field-label has-start-icon" for="email">Email</label>
+            </div>
+
+            <!-- Password field -->
+            <div class="pm-field mb-1">
+                <input type="password" name="Password" id="password" required
+                       placeholder=" "
+                       class="pm-field-input has-end-icon"
+                       autocomplete="current-password" />
+                <label class="pm-field-label" for="password">Mật khẩu</label>
+                <button type="button" class="pm-field-end-btn" onclick="togglePw('password','pw-eye')"
+                        aria-label="Hiện/ẩn mật khẩu">
+                    <span id="pw-eye">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                    </span>
+                </button>
+            </div>
+
+            <div style="text-align:right;margin-bottom:18px;">
+                <a href="/auth/forgot-password"
+                   style="font-size:.8125rem;font-weight:500;color:var(--mud-palette-primary);text-decoration:none;opacity:.85;transition:opacity .15s;"
+                   onmouseover="this.style.opacity=1" onmouseout="this.style.opacity='.85'">Quên mật khẩu?</a>
+            </div>
+
+            <button type="submit" id="login-btn"
+                    class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-full-width mud-ripple"
+                    style="height:46px;font-size:.9375rem;font-weight:600;letter-spacing:.02em;width:100%;border-radius:8px;">
+                <span class="mud-button-label">
+                    <span id="login-btn-text">Đăng nhập</span>
+                    <span id="login-spinner" style="display:none;margin-left:8px;vertical-align:middle;">
+                        <svg class="mud-progress-circular mud-progress-circular-indeterminate" style="width:20px;height:20px;" viewBox="22 22 44 44">
+                            <circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle>
+                        </svg>
+                    </span>
+                </span>
+            </button>
+        </form>
+
+        <div class="pm-auth-divider"><span>hoặc</span></div>
+
+        <div style="text-align:center;font-size:.875rem;color:var(--mud-palette-text-secondary);">
+            Chưa có tài khoản?
+            <a href="/auth/register" style="font-weight:700;color:var(--mud-palette-primary);text-decoration:none;margin-left:3px;">Đăng ký ngay</a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function togglePw(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>';
+    } else {
+        input.type = 'password';
+        icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
+    }
+}
+
+function handleLoginSubmit(e) {
+    const btn = document.getElementById('login-btn');
+    const txt = document.getElementById('login-btn-text');
+    const spinner = document.getElementById('login-spinner');
+    setTimeout(() => { btn.disabled = true; }, 10);
+    txt.textContent = 'Đang đăng nhập...';
+    spinner.style.display = 'inline-flex';
+    return true; // allow normal form POST
+}
+
+// Auto-focus email
+document.getElementById('email')?.focus();
+</script>
+}

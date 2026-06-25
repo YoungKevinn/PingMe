@@ -46,7 +46,14 @@ public class MessageExpiryJob : BackgroundService
                 _logger.LogError(ex, "Error in MessageExpiryJob.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore cancellation exception on shutdown
+            }
         }
     }
 }

@@ -1,0 +1,375 @@
+@{
+    ViewData["Title"] = "Tìm kiếm - PingMe";
+}
+
+<style>
+    .pm-search-center {
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 18px;
+    }
+
+    .pm-search-heading,
+    .pm-search-toolbar,
+    .pm-search-types,
+    .pm-search-filters,
+    .pm-result-title-row,
+    .pm-result-topline,
+    .pm-result-file,
+    .pm-result-actions,
+    .pm-search-loading,
+    .pm-search-empty,
+    .pm-search-more {
+        display: flex;
+        align-items: center;
+    }
+
+    .pm-search-heading {
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .pm-search-toolbar {
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .pm-search-input {
+        flex: 1;
+        min-width: 220px;
+    }
+
+    .pm-search-types {
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .pm-search-types button {
+        border: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+        border-radius: 999px;
+        padding: 7px 11px;
+        font-size: .86rem;
+        cursor: pointer;
+    }
+
+    .pm-search-types button.active {
+        border-color: var(--mud-palette-primary);
+        background: color-mix(in srgb, var(--mud-palette-primary) 14%, transparent);
+        color: var(--mud-palette-primary);
+        font-weight: 700;
+    }
+
+    .pm-search-types button:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    .pm-search-types button span {
+        margin-left: 6px;
+        font-size: .75rem;
+        opacity: .75;
+    }
+
+    .pm-search-filters {
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .pm-search-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 150px;
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+        font-weight: 700;
+    }
+
+    .pm-search-filters input,
+    .pm-search-filters select {
+        min-height: 38px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 7px 9px;
+        background: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        outline: none;
+    }
+
+    .pm-search-loading,
+    .pm-search-empty {
+        justify-content: center;
+        gap: 12px;
+        padding: 46px 12px;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-search-result-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .pm-search-result-card {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 14px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        background: var(--mud-palette-surface);
+    }
+
+    .pm-search-result-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: color-mix(in srgb, var(--mud-palette-primary) 12%, transparent);
+        color: var(--mud-palette-primary);
+    }
+
+    .pm-search-result-main {
+        min-width: 0;
+    }
+
+    .pm-result-topline {
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+
+    .pm-result-type {
+        font-size: .72rem;
+        font-weight: 800;
+        color: var(--mud-palette-primary);
+        text-transform: uppercase;
+    }
+
+    .pm-result-time,
+    .pm-result-context {
+        color: var(--mud-palette-text-secondary);
+        font-size: .78rem;
+    }
+
+    .pm-result-title-row {
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .pm-result-title-row h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-result-snippet {
+        margin: 6px 0 0;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+
+    .pm-finding-search-meta {
+        margin-top: 6px;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 4px 8px;
+        background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary);
+        font-size: .78rem;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+
+    .pm-finding-search-payload {
+        margin: 6px 0 0;
+        max-height: 4.5em;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 8px;
+        padding: 7px 8px;
+        background: rgba(15, 23, 42, .06);
+        color: var(--mud-palette-text-primary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+
+    .pm-result-file {
+        gap: 6px;
+        margin-top: 8px;
+        color: var(--mud-palette-text-primary);
+        overflow-wrap: anywhere;
+    }
+
+    .pm-result-file small {
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .pm-meta-chip,
+    .pm-status-chip,
+    .pm-severity-chip {
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: .72rem;
+        font-weight: 800;
+        border: 1px solid var(--mud-palette-divider);
+        color: var(--mud-palette-text-primary);
+        background: var(--mud-palette-background);
+    }
+
+    .pm-severity-info,
+    .pm-severity-low { color: #0369A1; background: #E0F2FE; border-color: #7DD3FC; }
+    .pm-severity-medium { color: #92400E; background: #FEF3C7; border-color: #FBBF24; }
+    .pm-severity-high { color: #991B1B; background: #FEE2E2; border-color: #FCA5A5; }
+    .pm-severity-critical { color: #7F1D1D; background: #FECACA; border-color: #EF4444; }
+
+    .pm-result-actions {
+        gap: 8px;
+        align-self: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .pm-search-more {
+        justify-content: center;
+        padding: 18px;
+    }
+
+    @@media (max-width: 760px) {
+        .pm-search-heading,
+        .pm-search-toolbar {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .pm-search-result-card {
+            grid-template-columns: 40px minmax(0, 1fr);
+        }
+
+        .pm-result-actions {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+        }
+    }
+</style>
+
+<div class="mud-container mud-container-maxwidth-lg mt-5">
+    <div class="pm-search-center">
+        <div class="pm-search-heading">
+            <div>
+                <h5 class="mud-typography mud-typography-h5 font-weight-bold">Tìm kiếm</h5>
+                <p class="mud-typography mud-typography-body2 mud-secondary-text">Tìm trong tin nhắn, người dùng, nhóm, snippet, IOC, finding, task và file.</p>
+            </div>
+
+            <button type="button" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-default mud-ripple" onclick="pmSearch.clearFilters()">
+                <span class="mud-button-label">
+                    <span class="mud-icon-root mud-svg-icon mud-button-icon-start">
+                        <svg viewBox="0 0 24 24"><path d="M4.25 5.61C6.27 8.2 10 13 10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6s3.72-4.8 5.74-7.39A1 1 0 0018.95 4H5.04a1 1 0 00-.79 1.61zM19.79 5.61A1 1 0 0018.95 4H5.04a1 1 0 00-.79 1.61L10 13v6c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-6l5.79-7.39z"/></svg>
+                    </span>
+                    Xóa bộ lọc
+                </span>
+            </button>
+        </div>
+
+        <div class="pm-search-toolbar">
+            <div class="mud-input-control mud-input-input-control pm-search-input">
+                <div class="mud-input-control-input-container">
+                    <div class="mud-input mud-input-outlined mud-input-adorned-start">
+                        <div class="mud-input-adornment mud-input-adornment-start">
+                            <svg class="mud-icon-root mud-svg-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                        </div>
+                        <input type="text" id="pm-search-input" placeholder="Nhập từ khóa cần tìm..." class="mud-input-slot mud-input-root mud-input-root-outlined mud-input-root-adorned-start" oninput="pmSearch.onKeyword(this.value)">
+                        <div class="mud-input-outlined-border"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" onclick="pmSearch.doSearch()">
+                <span class="mud-button-label">
+                    <span class="mud-icon-root mud-svg-icon mud-button-icon-start">
+                        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    </span>
+                    Tìm kiếm
+                </span>
+            </button>
+        </div>
+
+        <div class="pm-search-types" id="pm-type-btns">
+            <button type="button" class="active" id="type-all" onclick="pmSearch.setType('all')">Tất cả</button>
+            <button type="button" id="type-message" onclick="pmSearch.setType('message')">Tin nhắn</button>
+            <button type="button" id="type-user" onclick="pmSearch.setType('user')">Người dùng</button>
+            <button type="button" id="type-group" onclick="pmSearch.setType('group')">Nhóm</button>
+            <button type="button" id="type-snippet" onclick="pmSearch.setType('snippet')">Snippet</button>
+            <button type="button" id="type-ioc" onclick="pmSearch.setType('ioc')">IOC</button>
+            <button type="button" id="type-attachment" onclick="pmSearch.setType('attachment')">Tệp</button>
+            <button type="button" id="type-finding" onclick="pmSearch.setType('finding')">Finding</button>
+            <button type="button" id="type-task" onclick="pmSearch.setType('task')">Task</button>
+        </div>
+
+        <div class="pm-search-filters">
+            <label>
+                <span>Từ ngày</span>
+                <input type="date" id="filter-from" onchange="pmSearch.doSearch()" />
+            </label>
+            <label>
+                <span>Đến ngày</span>
+                <input type="date" id="filter-to" onchange="pmSearch.doSearch()" />
+            </label>
+            <label>
+                <span>Người gửi</span>
+                <select id="filter-sender" onchange="pmSearch.doSearch()">
+                    <option value="">Tất cả người gửi</option>
+                </select>
+            </label>
+            <label>
+                <span>Nhóm</span>
+                <select id="filter-group" onchange="pmSearch.doSearch()">
+                    <option value="">Tất cả nhóm</option>
+                </select>
+            </label>
+            <label>
+                <span>Người chat riêng</span>
+                <select id="filter-peer" onchange="pmSearch.doSearch()">
+                    <option value="">Tất cả cuộc trò chuyện riêng</option>
+                </select>
+            </label>
+            <label>
+                <span>Mức độ</span>
+                <select id="filter-severity" onchange="pmSearch.doSearch()">
+                    <option value="">Tất cả mức độ</option>
+                    <option value="Info">Info</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div id="pm-search-results">
+        <div class="pm-search-empty">
+            <svg class="mud-icon-root mud-svg-icon mud-icon-size-large" viewBox="0 0 24 24"><path d="M7 9H2V7h5v2zm0 3H2v2h5v-2zm13.59 7-3.83-3.83c-.8.52-1.74.83-2.76.83-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5c0 1.02-.31 1.96-.83 2.75L22 17.59 20.59 19zM17 11c0-1.65-1.35-3-3-3s-3 1.35-3 3 1.35 3 3 3 3-1.35 3-3zM2 19h10v-2H2v2z"/></svg>
+            <span>Nhập từ khóa cần tìm...</span>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/search.js" asp-append-version="true"></script>
+}

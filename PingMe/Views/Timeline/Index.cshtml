@@ -1,0 +1,412 @@
+@{
+    ViewData["Title"] = "Timeline - PingMe";
+}
+
+<style>
+    @@media (max-width: 959px) { #tl-sidebar { display: none !important; } #tl-mobile-select-wrapper { display: block !important; } }
+    @@media (min-width: 960px) { #tl-sidebar { display: flex !important; } #tl-mobile-select-wrapper { display: none; } }
+</style>
+<div style="display:flex;height:100%;gap:12px;padding:12px;box-sizing:border-box;overflow:hidden;">
+
+    <!-- Sidebar: Group List -->
+    <div id="tl-sidebar" style="width:260px;flex-shrink:0;flex-direction:column;min-height:0;display:none;">
+        <div style="background:var(--mud-palette-surface);border-radius:12px;display:flex;flex-direction:column;height:100%;overflow:hidden;border:1px solid var(--mud-palette-divider);">
+            <div style="padding:12px 16px;font-weight:700;font-size:0.9rem;border-bottom:1px solid var(--mud-palette-divider);color:var(--mud-palette-text-primary);">Nhóm của tôi</div>
+            <div id="tl-group-list" style="flex:1;overflow-y:auto;padding:6px;">
+                <div style="display:flex;justify-content:center;padding:16px;">
+                    <div class="mud-progress-circular mud-progress-circular-indeterminate mud-progress-circular-color-primary mud-progress-circular-small" style="width:24px;height:24px;">
+                        <svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content: Feed -->
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;">
+        <div style="background:var(--mud-palette-surface);border-radius:12px;display:flex;flex-direction:column;height:100%;overflow:hidden;border:1px solid var(--mud-palette-divider);">
+            <!-- Header -->
+            <div style="padding:16px 24px;border-bottom:1px solid var(--mud-palette-divider);flex-shrink:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                    <div>
+                        <h5 style="margin:0;display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.4rem;color:var(--mud-palette-text-primary);line-height:1.3;">
+                            <span style="display:inline-flex;flex-shrink:0;width:26px;height:26px;color:var(--mud-palette-primary);">
+                                <svg viewBox="0 0 24 24" style="width:100%;height:100%;fill:currentColor;"><path d="M23 8c0 1.1-.9 2-2 2-.18 0-.35-.02-.51-.07l-3.56 3.55c.05.16.07.34.07.52 0 1.1-.9 2-2 2s-2-.9-2-2c0-.18.02-.36.07-.52l-2.55-2.55c-.16.05-.34.07-.52.07s-.36-.02-.52-.07l-4.55 4.56c.05.16.07.33.07.51 0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2c.18 0 .35.02.51.07l4.56-4.55C8.02 9.36 8 9.18 8 9c0-1.1.9-2 2-2s2 .9 2 2c0 .18-.02.36-.07.52l2.55 2.55c.16-.05.34-.07.52-.07s.36.02.52.07l3.55-3.56C19.02 8.35 19 8.18 19 8c0-1.1.9-2 2-2s2 .9 2 2z"/></svg>
+                            </span>
+                            Threat Timeline
+                        </h5>
+                        <p style="margin:0;color:var(--mud-palette-info);font-size:0.875rem;">Theo dõi và phân tích chuỗi sự kiện bảo mật theo thời gian thực.</p>
+                    </div>
+                    <!-- Mobile Group Select -->
+                    <div id="tl-mobile-select-wrapper" style="display:none;min-width:200px;">
+                        <select id="tl-mobile-group" onchange="pmTimeline.onMobileGroupChange()" style="width:100%;height:36px;border:1px solid var(--mud-palette-divider);border-radius:6px;padding:0 8px;background:var(--mud-palette-surface);color:var(--mud-palette-text-primary);outline:none;">
+                            <option value="0">Chọn nhóm...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div style="padding:8px 16px;border-bottom:1px solid var(--mud-palette-divider);display:flex;align-items:center;flex-wrap:wrap;gap:12px;flex-shrink:0;">
+                <div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;" id="tl-filter-chips">
+                    <div class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-medium" data-filter="all" onclick="pmTimeline.setFilter('all')" style="cursor:pointer;"><span class="mud-chip-content">Tất cả</span></div>
+                    <div class="mud-chip mud-chip-text mud-chip-color-error mud-chip-size-medium" data-filter="finding" onclick="pmTimeline.setFilter('finding')" style="cursor:pointer;"><span class="mud-chip-content">Findings</span></div>
+                    <div class="mud-chip mud-chip-text mud-chip-color-warning mud-chip-size-medium" data-filter="ioc" onclick="pmTimeline.setFilter('ioc')" style="cursor:pointer;"><span class="mud-chip-content">IOCs</span></div>
+                    <div class="mud-chip mud-chip-text mud-chip-color-success mud-chip-size-medium" data-filter="task" onclick="pmTimeline.setFilter('task')" style="cursor:pointer;"><span class="mud-chip-content">Tasks</span></div>
+                    <div class="mud-chip mud-chip-text mud-chip-color-secondary mud-chip-size-medium" data-filter="file" onclick="pmTimeline.setFilter('file')" style="cursor:pointer;"><span class="mud-chip-content">Files</span></div>
+                </div>
+                <div style="flex:1;"></div>
+                <div style="position:relative;min-width:220px;max-width:320px;">
+                    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);display:flex;align-items:center;pointer-events:none;color:var(--mud-palette-text-secondary);">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    </span>
+                    <input type="text" id="tl-search" placeholder="search" oninput="pmTimeline.onSearchInput()" style="width:100%;height:34px;border:1px solid var(--mud-palette-divider);border-radius:6px;padding:0 10px 0 32px;background:var(--mud-palette-surface);color:var(--mud-palette-text-primary);outline:none;font-size:0.875rem;box-sizing:border-box;" />
+                </div>
+            </div>
+
+            <!-- Feed Area -->
+            <div id="tl-feed" style="flex:1;overflow-y:auto;padding:16px;">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;">
+                    <span style="font-size:80px;opacity:0.3;color:var(--mud-palette-primary);line-height:1;">
+                        <svg viewBox="0 0 24 24" style="width:1em;height:1em;fill:currentColor;"><path d="M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24v-1.57zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z"/></svg>
+                    </span>
+                    <h6 style="color:var(--mud-palette-primary);margin:8px 0 4px;">Chọn một nhóm</h6>
+                    <p style="color:var(--mud-palette-text-secondary);margin:0;font-size:0.875rem;">Chọn nhóm ở thanh bên trái để xem timeline</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmTimeline = {
+    _groups: [],
+    _events: [],
+    _groupId: 0,
+    _filter: null,
+    _search: '',
+    _page: 1,
+    _pageSize: 50,
+    _loading: false,
+    _hasMore: true,
+    _searchTimer: null,
+
+    async init() {
+        await this._loadGroups();
+        if (this._groups.length > 0) {
+            await this.selectGroup(this._groups[0].id);
+        }
+    },
+
+    async _loadGroups() {
+        const groups = await pmApi.get('/api/groups') || [];
+        this._groups = groups;
+        this._renderGroupList();
+        this._renderMobileSelect();
+    },
+
+    _renderGroupList() {
+        const c = document.getElementById('tl-group-list');
+        if (!this._groups.length) {
+            c.innerHTML = '<p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-text-secondary);text-align:center;padding:16px;">Không có nhóm nào</p>';
+            return;
+        }
+        c.innerHTML = '<div class="mud-list mud-list-padding">' + this._groups.map(g => {
+            const isActive = g.id === this._groupId;
+            const initial = (g.name || '?')[0];
+            const avatarContent = g.avatarUrl
+                ? `<img src="${pmEscape(g.avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" style="width:100%; height:100%; object-fit:cover;" /><span style="display:none;">${pmEscape(initial)}</span>`
+                : `<span>${pmEscape(initial)}</span>`;
+            return `<div class="mud-list-item mud-list-item-gutters mud-list-item-clickable mud-ripple rounded-lg mb-1 ${isActive ? 'mud-selected-item' : ''}" style="${isActive ? 'background: rgba(var(--mud-palette-primary-rgb), 0.08);' : ''}" onclick="pmTimeline.selectGroup(${g.id})">
+                <div class="mud-list-item-text">
+                    <div class="d-flex align-center gap-3">
+                        <div class="mud-avatar mud-avatar-small mud-avatar-filled mud-avatar-filled-primary">
+                            ${avatarContent}
+                        </div>
+                        <p class="mud-typography mud-typography-body2 text-truncate" style="font-weight: 500;${isActive ? ' color: var(--mud-palette-primary);' : ''}; margin: 0;">
+                            ${pmEscape(g.name)}
+                        </p>
+                    </div>
+                </div>
+            </div>`;
+        }).join('') + '</div>';
+    },
+
+    _renderMobileSelect() {
+        const sel = document.getElementById('tl-mobile-group');
+        sel.innerHTML = '<option value="0">Chọn nhóm...</option>' +
+            this._groups.map(g => `<option value="${g.id}"${g.id === this._groupId ? ' selected' : ''}>${pmEscape(g.name)}</option>`).join('');
+    },
+
+    onMobileGroupChange() {
+        const val = parseInt(document.getElementById('tl-mobile-group').value);
+        if (val > 0) this.selectGroup(val);
+    },
+
+    async selectGroup(groupId) {
+        if (this._groupId === groupId) return;
+        this._groupId = groupId;
+        this._renderGroupList();
+        this._renderMobileSelect();
+        await this._loadEvents(true);
+    },
+
+    setFilter(filterVal) {
+        const newFilter = filterVal === 'all' ? null : filterVal;
+        if (this._filter === newFilter) return;
+        this._filter = newFilter;
+        this._renderFilterChips();
+        this._loadEvents(true);
+    },
+
+    _renderFilterChips() {
+        const chips = document.getElementById('tl-filter-chips');
+        const colorMap = { all: 'primary', finding: 'error', ioc: 'warning', task: 'success', file: 'secondary' };
+        ['all','finding','ioc','task','file'].forEach(f => {
+            const btn = chips.querySelector(`[data-filter="${f}"]`);
+            if (!btn) return;
+            const isActive = (f === 'all' && this._filter === null) || f === this._filter;
+            if (isActive) {
+                btn.className = `mud-chip mud-chip-filled mud-chip-color-${colorMap[f]} mud-chip-size-medium`;
+            } else {
+                btn.className = `mud-chip mud-chip-text mud-chip-color-${colorMap[f]} mud-chip-size-medium`;
+            }
+        });
+    },
+
+    onSearchInput() {
+        clearTimeout(this._searchTimer);
+        this._searchTimer = setTimeout(() => {
+            const val = document.getElementById('tl-search').value;
+            if (this._search === val) return;
+            this._search = val;
+            this._loadEvents(true);
+        }, 400);
+    },
+
+    async _loadEvents(reset) {
+        if (this._groupId === 0 || this._loading) return;
+        this._loading = true;
+
+        if (reset) {
+            this._page = 1;
+            this._events = [];
+            this._hasMore = true;
+        }
+
+        const feed = document.getElementById('tl-feed');
+        if (reset && this._events.length === 0) {
+            feed.innerHTML = '<div class="d-flex flex-column align-center justify-center h-100"><div class="mud-progress-circular mud-progress-circular-indeterminate mud-progress-circular-color-primary mud-progress-circular-medium" style="width:40px;height:40px;"><svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg></div><p class="mud-typography mud-typography-body2 mt-4" style="color:var(--mud-palette-text-secondary);">Đang tải...</p></div>';
+        }
+
+        try {
+            let url = `/api/groups/${this._groupId}/timeline?page=${this._page}&pageSize=${this._pageSize}`;
+            if (this._filter) url += `&eventType=${this._filter}`;
+            if (this._search) url += `&searchTerm=${encodeURIComponent(this._search)}`;
+            const result = await pmApi.get(url) || [];
+
+            if (result.length < this._pageSize) this._hasMore = false;
+            this._events = reset ? result : this._events.concat(result);
+            this._page++;
+        } catch(e) {}
+
+        this._loading = false;
+        this._renderFeed();
+    },
+
+    async loadMore() {
+        await this._loadEvents(false);
+    },
+
+    _getEventColorClass(eventType) {
+        switch(eventType) {
+            case 'finding': return 'error';
+            case 'ioc': return 'warning';
+            case 'task': return 'success';
+            case 'file': return 'secondary';
+            default: return 'primary';
+        }
+    },
+
+    _getActionText(eventType) {
+        switch(eventType) {
+            case 'finding': return 'đã báo cáo một lỗ hổng';
+            case 'ioc': return 'đã chia sẻ một IOC';
+            case 'task': return 'đã giao một công việc mới';
+            case 'file': return 'đã đính kèm một tệp';
+            default: return 'đã cập nhật timeline';
+        }
+    },
+
+    _formatTimestamp(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        return d.toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    },
+
+    _getSeverityColorClass(sev) {
+        if (!sev) return 'info';
+        const s = sev.toLowerCase();
+        if (s.includes('crit') || s.includes('high')) return 'error';
+        if (s.includes('med')) return 'warning';
+        return 'info';
+    },
+
+    _getPriorityColorClass(pri) {
+        if (!pri) return 'info';
+        const s = pri.toLowerCase();
+        if (s.includes('high') || s.includes('urgent')) return 'error';
+        if (s.includes('med')) return 'warning';
+        return 'info';
+    },
+
+    _renderEventBody(ev) {
+        if (ev.eventType === 'finding') {
+            let chips = '<div class="d-flex gap-2 mb-2">';
+            if (ev.severity) {
+                const sevColor = this._getSeverityColorClass(ev.severity);
+                chips += `<div class="mud-chip mud-chip-filled mud-chip-color-${sevColor} mud-chip-size-small rounded-pill px-2"><span class="mud-chip-content">${pmEscape(ev.severity.toUpperCase())}</span></div>`;
+            }
+            if (ev.status) {
+                chips += `<div class="mud-chip mud-chip-outlined mud-chip-color-default mud-chip-size-small rounded-pill px-2"><span class="mud-chip-content">${pmEscape(ev.status)}</span></div>`;
+            }
+            chips += '</div>';
+            let body = chips + `<p class="mud-typography mud-typography-body1 mb-2" style="font-weight:600; margin: 0;">${pmEscape(ev.title)}</p>`;
+            if (ev.endpoint) {
+                body += `<p class="mud-typography mud-typography-body2 d-flex align-center gap-1" style="color:var(--mud-palette-text-secondary); margin: 0;"><svg class="mud-icon-root mud-svg-icon mud-icon-size-small" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M14 12l-2 2-2-2 2-2 2 2zm-2-6l2.12 2.12 2.5-2.5L12 1 7.38 5.62l2.5 2.5L12 6zm-6 6l2.12-2.12-2.5-2.5L1 12l4.62 4.62 2.5-2.5L6 12zm12 0l-2.12 2.12 2.5 2.5L23 12l-4.62-4.62-2.5 2.5L18 12zm-6 6l-2.12-2.12-2.5 2.5L12 23l4.62-4.62-2.5-2.5L12 18z"/></svg> ${pmEscape(ev.endpoint)}</p>`;
+            }
+            return body;
+        }
+        if (ev.eventType === 'ioc') {
+            let chips = '<div class="d-flex gap-2 mb-2">';
+            if (ev.iocType) {
+                chips += `<div class="mud-chip mud-chip-filled mud-chip-color-warning mud-chip-size-small rounded-pill px-2"><span class="mud-chip-content">${pmEscape(ev.iocType.toUpperCase())}</span></div>`;
+            }
+            chips += '</div>';
+            return chips + `<p class="mud-typography mud-typography-body1 mb-1" style="font-weight:600; margin: 0;">${pmEscape(ev.title)}</p>`;
+        }
+        if (ev.eventType === 'task') {
+            let chips = '<div class="d-flex gap-2 mb-2">';
+            if (ev.priority) {
+                const prioColor = this._getPriorityColorClass(ev.priority);
+                chips += `<div class="mud-chip mud-chip-filled mud-chip-color-${prioColor} mud-chip-size-small rounded-pill px-2"><span class="mud-chip-content">${pmEscape(ev.priority.toUpperCase())}</span></div>`;
+            }
+            if (ev.status) {
+                chips += `<div class="mud-chip mud-chip-outlined mud-chip-color-default mud-chip-size-small rounded-pill px-2"><span class="mud-chip-content">${pmEscape(ev.status)}</span></div>`;
+            }
+            chips += '</div>';
+            let body = chips + `<p class="mud-typography mud-typography-body1 mb-2" style="font-weight:600; margin: 0;">${pmEscape(ev.title)}</p>`;
+            let details = '<div class="d-flex flex-wrap gap-4">';
+            if (ev.assignedTo) {
+                details += `<p class="mud-typography mud-typography-caption d-flex align-center gap-1" style="color:var(--mud-palette-text-secondary); margin: 0;"><svg class="mud-icon-root mud-svg-icon mud-icon-size-small" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg> ${pmEscape(ev.assignedTo)}</p>`;
+            }
+            if (ev.dueDate) {
+                details += `<p class="mud-typography mud-typography-caption d-flex align-center gap-1" style="color:var(--mud-palette-text-secondary); margin: 0;"><svg class="mud-icon-root mud-svg-icon mud-icon-size-small" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/></svg> ${new Date(ev.dueDate).toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric'})}</p>`;
+            }
+            details += '</div>';
+            return body + details;
+        }
+        if (ev.eventType === 'file') {
+            return `<div class="d-flex align-center gap-3">
+                <div class="mud-avatar mud-avatar-medium mud-avatar-filled mud-avatar-filled-secondary">
+                    <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+                </div>
+                <div class="overflow-hidden"><p class="mud-typography mud-typography-body2 text-truncate" style="font-weight:600; margin: 0;">${pmEscape(ev.fileName || ev.title)}</p></div>
+            </div>`;
+        }
+        // default - message/other
+        return `<p class="mud-typography mud-typography-body2" style="font-style:italic;border-left:3px solid var(--mud-palette-primary);padding-left:12px; margin: 0;">"${pmEscape(ev.title)}"</p>`;
+    },
+
+    _renderFeed() {
+        const feed = document.getElementById('tl-feed');
+        if (this._groupId === 0) {
+            feed.innerHTML = `<div class="d-flex flex-column align-center justify-center h-100 text-center">
+                <span class="mud-icon-root mud-svg-icon mud-icon-size-medium mb-4" style="font-size: 80px; opacity: 0.3; color: var(--mud-palette-primary);"><svg viewBox="0 0 24 24" style="width:1em;height:1em;fill:currentColor;"><path d="M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24v-1.57zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z"/></svg></span>
+                <h6 class="mud-typography mud-typography-h6" style="color:var(--mud-palette-primary);">Chưa chọn nhóm</h6>
+                <p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-text-secondary);">Chọn nhóm ở thanh bên trái để xem timeline</p>
+            </div>`;
+            return;
+        }
+
+        if (!this._events.length) {
+            feed.innerHTML = `<div class="d-flex flex-column align-center justify-center h-100 text-center">
+                <span class="mud-icon-root mud-svg-icon mud-icon-size-medium mb-4" style="font-size: 80px; opacity: 0.3; color: var(--mud-palette-primary);"><svg viewBox="0 0 24 24" style="width:1em;height:1em;fill:currentColor;"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></span>
+                <h6 class="mud-typography mud-typography-h6" style="color:var(--mud-palette-primary);">Không có dữ liệu</h6>
+                <p class="mud-typography mud-typography-body2" style="color:var(--mud-palette-text-secondary);">Chưa có hoạt động nào trong timeline này</p>
+            </div>`;
+            return;
+        }
+
+        let html = '<div class="mud-timeline mud-timeline-start mud-timeline-modifiers pa-0" style="display:flex; flex-direction:column; width:100%;">';
+        this._events.forEach(ev => {
+            const colorClass = this._getEventColorClass(ev.eventType);
+            const initial = (ev.actorDisplayName || '?')[0];
+            const avatarContent = ev.actorAvatar
+                ? `<img src="${pmEscape(ev.actorAvatar)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" style="width:100%; height:100%; object-fit:cover;" /><span style="display:none;">${pmEscape(initial)}</span>`
+                : `<span>${pmEscape(initial)}</span>`;
+
+            let actionArea = '';
+            if (ev.actionUrl) {
+                actionArea = `<div class="mud-card-actions pa-2 px-4" style="background: rgba(var(--mud-palette-primary-rgb), 0.03);">
+                    <button type="button" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-small mud-ripple text-none" onclick="window.location.href='${pmEscape(ev.actionUrl)}'">
+                        <span class="mud-button-label">${pmEscape(ev.actionText || 'Xem')}</span>
+                        <span class="mud-button-icon-end mud-button-icon-size-small"><svg class="mud-icon-root mud-svg-icon mud-icon-size-small" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg></span>
+                    </button>
+                    ${ev.messageId && ev.groupId ? `<button type="button" class="mud-button-root mud-button mud-button-text mud-button-text-secondary mud-button-text-size-small mud-ripple text-none" onclick="window.location.href='/chat/group/${ev.groupId}?messageId=${ev.messageId}'">
+                        <span class="mud-button-icon-start mud-button-icon-size-small"><svg class="mud-icon-root mud-svg-icon mud-icon-size-small" viewBox="0 0 24 24" style="fill:currentColor;"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg></span>
+                        <span class="mud-button-label">Mở trong chat</span>
+                    </button>` : ''}
+                </div>`;
+            }
+
+            html += `<div class="mud-timeline-item mud-timeline-item-size-medium mud-elevation-1" style="width:100%;">
+                <div class="mud-timeline-item-separator">
+                    <div class="mud-timeline-item-dot mud-timeline-dot-size-medium mud-elevation-1 mud-timeline-dot-${colorClass}"><div class="mud-timeline-item-dot-inner"></div></div>
+                    <div class="mud-timeline-item-connector"></div>
+                </div>
+                <div class="mud-timeline-item-content">
+                    <div class="mud-paper mud-elevation-0 mud-card border mud-border-lines-default pa-0 overflow-hidden" style="transition: transform 0.2s, box-shadow 0.2s; border-radius: 12px;">
+                        <div class="mud-card-header pa-3 border-b mud-border-lines-default" style="background: rgba(var(--mud-palette-surface-rgb), 0.5);">
+                            <div class="mud-card-header-avatar">
+                                <div class="mud-avatar mud-avatar-small mud-avatar-filled mud-avatar-filled-primary">
+                                    ${avatarContent}
+                                </div>
+                            </div>
+                            <div class="mud-card-header-content">
+                                <p class="mud-typography mud-typography-body2" style="font-weight: 700; margin: 0;">${pmEscape(ev.actorDisplayName)}</p>
+                                <p class="mud-typography mud-typography-caption" style="color: var(--mud-palette-text-secondary); margin: 0;">${this._getActionText(ev.eventType)}</p>
+                            </div>
+                            <div class="mud-card-header-actions">
+                                <span class="mud-typography mud-typography-caption" style="color: var(--mud-palette-text-primary); font-weight: 600; padding: 12px 8px; display: inline-block;">${this._formatTimestamp(ev.timestamp)}</span>
+                            </div>
+                        </div>
+                        <div class="mud-card-content pa-4">
+                            ${this._renderEventBody(ev)}
+                        </div>
+                        ${actionArea}
+                    </div>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+
+        if (this._hasMore) {
+            html += `<div class="d-flex justify-center mt-6">
+                <button type="button" class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-ripple rounded-pill px-6 text-none" onclick="pmTimeline.loadMore()">
+                    <span class="mud-button-label">Tải thêm</span>
+                </button>
+            </div>`;
+        } else if (this._events.length > 0) {
+            html += `<div class="d-flex justify-center mt-8 mb-4">
+                <span class="mud-typography mud-typography-caption" style="color:var(--mud-palette-text-secondary);">Đã tải hết dữ liệu</span>
+            </div>`;
+        }
+
+        feed.innerHTML = html;
+    }
+};
+document.addEventListener('DOMContentLoaded', () => pmTimeline.init());
+</script>
+}

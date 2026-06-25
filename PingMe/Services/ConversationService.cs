@@ -35,7 +35,7 @@ public class ConversationService : IConversationService
         var result = new List<ConversationResponse>();
 
         // 1. Lấy danh sách bạn bè (DM)
-        var dmPeerIds = await _db.Messages
+        var dmPeerIds = await _db.Messages.AsNoTracking()
             .Where(m => (m.SenderId == userId || m.ReceiverId == userId) && m.GroupId == null && !m.IsDeleted)
             .Select(m => m.SenderId == userId ? m.ReceiverId!.Value : m.SenderId)
             .Distinct()
@@ -44,28 +44,32 @@ public class ConversationService : IConversationService
         if (dmPeerIds.Any())
         {
             // Lấy tất cả thông tin user một lần
-            var peers = await _db.Users
+            var peers = await _db.Users.AsNoTracking()
                 .Where(u => dmPeerIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id);
 
-            var nicknames = await _db.ConversationNicknames
+            var nicknames = await _db.ConversationNicknames.AsNoTracking()
                 .Where(n => n.SetByUserId == userId && n.GroupId == null && dmPeerIds.Contains(n.TargetUserId))
                 .ToDictionaryAsync(n => n.TargetUserId, n => n.Nickname);
 
-            // Lấy last message cho tất cả peer (batch)
-            var lastMessages = await _db.Messages
-                .Where(m =>
-                    m.GroupId == null &&
-                    m.ReceiverId != null &&
-                    !m.IsDeleted &&
-                    ((m.SenderId == userId && dmPeerIds.Contains(m.ReceiverId.Value)) ||
-                     (m.ReceiverId == userId && dmPeerIds.Contains(m.SenderId))))
+            // Lấy last message cho tất cả peer (từng query nhỏ qua index thay vì GroupBy toàn cục)
+            var lastMessages = new Dictionary<int, PingMe.Models.Message?>();
+            var dmMsgIds = await _db.Messages.AsNoTracking()
+                .Where(m => m.GroupId == null && !m.IsDeleted &&
+                            ((m.SenderId == userId && dmPeerIds.Contains(m.ReceiverId!.Value)) ||
+                             (m.ReceiverId == userId && dmPeerIds.Contains(m.SenderId))))
                 .GroupBy(m => m.SenderId == userId ? m.ReceiverId!.Value : m.SenderId)
-                .Select(g => new { PeerId = g.Key, LastMsg = g.OrderByDescending(x => x.CreatedAt).FirstOrDefault() })
-                .ToDictionaryAsync(x => x.PeerId, x => x.LastMsg);
+                .Select(g => g.Max(m => m.Id))
+                .ToListAsync();
+            var dmMessages = await _db.Messages.AsNoTracking().Where(m => dmMsgIds.Contains(m.Id)).ToListAsync();
+            foreach (var m in dmMessages)
+            {
+                int pId = m.SenderId == userId ? m.ReceiverId!.Value : m.SenderId;
+                lastMessages[pId] = m;
+            }
 
-            // Unread count cho mỗi peer (batch)
-            var unreadCounts = await _db.Messages
+            // Unread count cho mỗi peer
+            var unreadCounts = await _db.Messages.AsNoTracking()
                 .Where(m => m.GroupId == null && m.ReceiverId == userId && !m.IsDeleted && dmPeerIds.Contains(m.SenderId) &&
                     !_db.MessageReadReceipts.Any(r => r.MessageId == m.Id && r.UserId == userId))
                 .GroupBy(m => m.SenderId)
@@ -73,7 +77,7 @@ public class ConversationService : IConversationService
                 .ToDictionaryAsync(x => x.PeerId, x => x.Count);
 
             // Pinned DM
-            var pinnedDmIds = await _db.PinnedConversations
+            var pinnedDmIds = await _db.PinnedConversations.AsNoTracking()
                 .Where(p => p.UserId == userId && p.PeerUserId != null)
                 .Select(p => p.PeerUserId!.Value)
                 .ToListAsync();
@@ -106,20 +110,26 @@ public class ConversationService : IConversationService
         var groupIds = await _db.GroupMembers.Where(gm => gm.UserId == userId).Select(gm => gm.GroupId).ToListAsync();
         if (groupIds.Any())
         {
-            var groups = await _db.Groups
+            var groups = await _db.Groups.AsNoTracking()
                 .Include(g => g.Members)
                 .Where(g => groupIds.Contains(g.Id) && !g.IsDeleted)
                 .ToListAsync();
 
-            // Last message group
-            var lastGroupMessages = await _db.Messages
+            // Last message group (từng query nhỏ qua index thay vì GroupBy toàn cục)
+            var lastGroupMessages = new Dictionary<int, PingMe.Models.Message?>();
+            var groupMsgIds = await _db.Messages.AsNoTracking()
                 .Where(m => m.GroupId != null && groupIds.Contains(m.GroupId.Value) && !m.IsDeleted)
                 .GroupBy(m => m.GroupId!.Value)
-                .Select(g => new { GroupId = g.Key, LastMsg = g.OrderByDescending(x => x.CreatedAt).FirstOrDefault() })
-                .ToDictionaryAsync(x => x.GroupId, x => x.LastMsg);
+                .Select(g => g.Max(m => m.Id))
+                .ToListAsync();
+            var groupMessagesList = await _db.Messages.AsNoTracking().Where(m => groupMsgIds.Contains(m.Id)).ToListAsync();
+            foreach (var m in groupMessagesList)
+            {
+                lastGroupMessages[m.GroupId!.Value] = m;
+            }
 
             // Unread group
-            var groupUnread = await _db.Messages
+            var groupUnread = await _db.Messages.AsNoTracking()
       .Where(m =>
           m.GroupId != null &&
           groupIds.Contains(m.GroupId.Value) &&
@@ -131,7 +141,7 @@ public class ConversationService : IConversationService
       .ToDictionaryAsync(x => x.GroupId, x => x.Count);
 
             // Pinned group
-            var pinnedGroupIds = await _db.PinnedConversations
+            var pinnedGroupIds = await _db.PinnedConversations.AsNoTracking()
                 .Where(p => p.UserId == userId && p.GroupId != null)
                 .Select(p => p.GroupId!.Value)
                 .ToListAsync();
@@ -442,3 +452,5 @@ public class ConversationService : IConversationService
         return normalized.Length <= 140 ? normalized : normalized[..137] + "...";
     }
 }
+
+

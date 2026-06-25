@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PingMe.Models;
 using System.Reflection.Emit;
 
@@ -52,22 +53,22 @@ public class AppDbContext : DbContext
             e.HasIndex(u => u.Email).IsUnique();
 
             e.Property(u => u.IsOnline).HasDefaultValue(false);
-            e.Property(u => u.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(u => u.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(u => u.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(u => u.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
         });
 
         // FRIEND REQUEST
         b.Entity<FriendRequest>(e =>
         {
             e.HasIndex(f => new { f.FromUserId, f.ToUserId }).IsUnique();
-            e.Property(f => f.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(f => f.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
         });
 
         // FRIENDSHIP
         b.Entity<Friendship>(e =>
         {
             e.HasIndex(f => new { f.UserAId, f.UserBId }).IsUnique();
-            e.Property(f => f.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(f => f.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
         });
 
         // ─────────────────────────────────────────────────
@@ -76,8 +77,8 @@ public class AppDbContext : DbContext
         b.Entity<Group>(e =>
         {
             e.Property(g => g.IsDeleted).HasDefaultValue(false);
-            e.Property(g => g.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(g => g.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(g => g.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(g => g.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             // Creator → RESTRICT (không xóa User nếu còn group do họ tạo)
             e.HasOne(g => g.CreatedBy)
@@ -97,7 +98,7 @@ public class AppDbContext : DbContext
              .HasConversion<string>()
              .HasDefaultValue(GroupMemberRole.Member);
 
-            e.Property(gm => gm.JoinedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(gm => gm.JoinedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(gm => gm.Group)
              .WithMany(g => g.Members)
@@ -122,8 +123,8 @@ public class AppDbContext : DbContext
             e.Property(m => m.IsDeleted).HasDefaultValue(false);
             e.Property(m => m.IsEdited).HasDefaultValue(false);
             e.Property(m => m.IsPinned).HasDefaultValue(false);
-            e.Property(m => m.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(m => m.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(m => m.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(m => m.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             // Sender → RESTRICT (bảo toàn lịch sử)
             e.HasOne(m => m.Sender)
@@ -136,6 +137,12 @@ public class AppDbContext : DbContext
              .WithMany(u => u.ReceivedMessages)
              .HasForeignKey(m => m.ReceiverId)
              .OnDelete(DeleteBehavior.SetNull);
+
+            // Indexes to speed up conversation loading and queries
+            e.HasIndex(m => new { m.SenderId, m.ReceiverId, m.GroupId });
+            e.HasIndex(m => new { m.ReceiverId, m.GroupId });
+            e.HasIndex(m => m.CreatedAt);
+            e.HasIndex(m => m.IsDeleted);
 
             // Group → CASCADE
             e.HasOne(m => m.Group)
@@ -198,10 +205,10 @@ public class AppDbContext : DbContext
                 .HasMaxLength(512);
 
             e.Property(x => x.CreatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.Property(x => x.UpdatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasIndex(x => x.Type);
             e.HasIndex(x => x.Severity);
@@ -251,7 +258,7 @@ public class AppDbContext : DbContext
                 .HasMaxLength(16);
 
             e.Property(x => x.CreatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(x => x.Group)
                 .WithMany()
@@ -287,7 +294,7 @@ public class AppDbContext : DbContext
                 .IsRequired();
 
             e.Property(x => x.CreatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(x => x.CreatedByUser)
                 .WithMany()
@@ -339,10 +346,10 @@ public class AppDbContext : DbContext
                 .IsRequired();
 
             e.Property(x => x.CreatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.Property(x => x.UpdatedAt)
-                .HasDefaultValueSql("NOW(6)");
+                .HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(x => x.Group)
                 .WithMany(g => g.Tasks)
@@ -377,7 +384,7 @@ public class AppDbContext : DbContext
         // ─────────────────────────────────────────────────
         b.Entity<MessageAttachment>(e =>
         {
-            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(a => a.Message)
              .WithMany(m => m.Attachments)
@@ -392,7 +399,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(r => new { r.MessageId, r.UserId, r.Emoji }).IsUnique();
 
-            e.Property(r => r.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(r => r.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(r => r.Message)
              .WithMany(m => m.Reactions)
@@ -413,7 +420,7 @@ public class AppDbContext : DbContext
             e.HasIndex(s => new { s.UserId, s.MessageId }).IsUnique();
             e.HasIndex(s => new { s.UserId, s.CreatedAt });
 
-            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(s => s.User)
              .WithMany(u => u.SavedMessages)
@@ -432,8 +439,9 @@ public class AppDbContext : DbContext
         b.Entity<MessageReadReceipt>(e =>
         {
             e.HasIndex(r => new { r.MessageId, r.UserId }).IsUnique();
+            e.HasIndex(r => r.UserId);  // speeds up unread count lookups
 
-            e.Property(r => r.ReadAt).HasDefaultValueSql("NOW(6)");
+            e.Property(r => r.ReadAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(r => r.Message)
              .WithMany(m => m.ReadReceipts)
@@ -452,8 +460,8 @@ public class AppDbContext : DbContext
         b.Entity<UserSession>(e =>
         {
             e.Property(s => s.IsRevoked).HasDefaultValue(false);
-            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(s => s.LastActive).HasDefaultValueSql("NOW(6)");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(s => s.LastActive).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasIndex(s => s.TokenHash);
             e.HasIndex(s => s.UserId);
@@ -470,7 +478,7 @@ public class AppDbContext : DbContext
         // ─────────────────────────────────────────────────
         b.Entity<AuditLog>(e =>
         {
-            e.Property(a => a.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(a => a.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasIndex(a => a.UserId);
             e.HasIndex(a => a.CreatedAt);
@@ -490,7 +498,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(b2 => new { b2.BlockerUserId, b2.BlockedUserId }).IsUnique();
 
-            e.Property(b2 => b2.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(b2 => b2.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(b2 => b2.Blocker)
              .WithMany(u => u.BlockedUsers)
@@ -509,7 +517,7 @@ public class AppDbContext : DbContext
         // ─────────────────────────────────────────────────
         b.Entity<PinnedConversation>(e =>
         {
-            e.Property(p => p.PinnedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(p => p.PinnedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(p => p.User)
              .WithMany(u => u.PinnedConversations)
@@ -536,8 +544,8 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(n => new { n.SetByUserId, n.TargetUserId, n.GroupId }).IsUnique();
 
-            e.Property(n => n.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(n => n.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(n => n.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(n => n.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(n => n.SetBy)
              .WithMany(u => u.NicknamesSet)
@@ -563,8 +571,8 @@ public class AppDbContext : DbContext
             e.Property(bg => bg.BackgroundType)
              .HasConversion<string>();
 
-            e.Property(bg => bg.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(bg => bg.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(bg => bg.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(bg => bg.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(bg => bg.User)
              .WithMany(u => u.ConversationBackgrounds)
@@ -594,8 +602,8 @@ public class AppDbContext : DbContext
 
             e.Property(s => s.IsRevoked).HasDefaultValue(false);
             e.Property(s => s.AccessCount).HasDefaultValue(0);
-            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(s => s.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(s => s.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(s => s.User)
              .WithMany(u => u.CodeSnippets)
@@ -615,7 +623,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(l => l.SnippetId);
             e.HasIndex(l => l.AccessedAt);
-            e.Property(l => l.AccessedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(l => l.AccessedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(l => l.Snippet)
              .WithMany(s => s.AccessLogs)
@@ -647,8 +655,8 @@ public class AppDbContext : DbContext
             e.HasIndex(w => w.Token).IsUnique();
 
             e.Property(w => w.IsActive).HasDefaultValue(true);
-            e.Property(w => w.CreatedAt).HasDefaultValueSql("NOW(6)");
-            e.Property(w => w.UpdatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(w => w.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
+            e.Property(w => w.UpdatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(w => w.Group)
              .WithMany(g => g.Webhooks)
@@ -664,7 +672,7 @@ public class AppDbContext : DbContext
         b.Entity<MessageEditHistory>(e =>
         {
             e.HasIndex(h => h.MessageId);
-            e.Property(h => h.EditedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(h => h.EditedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
         });
 
         // ─────────────────────────────────────────────────
@@ -692,7 +700,7 @@ public class AppDbContext : DbContext
 
             e.Property(s => s.IsViewed).HasDefaultValue(false);
             e.Property(s => s.IsRevoked).HasDefaultValue(false);
-            e.Property(s => s.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(s => s.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(s => s.CreatedByUser)
              .WithMany(u => u.OneTimeSecrets)
@@ -720,7 +728,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(p => p.MessageId).IsUnique();
             e.Property(p => p.AllowMultiple).HasDefaultValue(false);
-            e.Property(p => p.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(p => p.Message)
              .WithOne(m => m.Poll)
@@ -741,7 +749,7 @@ public class AppDbContext : DbContext
         b.Entity<PollVote>(e =>
         {
             e.HasIndex(v => new { v.PollOptionId, v.UserId }).IsUnique();
-            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW(6)");
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("UTC_TIMESTAMP(6)");
 
             e.HasOne(v => v.PollOption)
              .WithMany(o => o.Votes)
@@ -753,5 +761,30 @@ public class AppDbContext : DbContext
              .HasForeignKey(v => v.UserId)
              .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // ─────────────────────────────────────────────────
+        // CHUẨN HÓA THỜI GIAN (UTC) cho TẤT CẢ chức năng.
+        // App lưu DateTime.UtcNow (UTC) nhưng MySQL trả về Kind=Unspecified
+        // nên JSON thiếu 'Z' → client hiểu nhầm là giờ local (lệch múi giờ).
+        // Bộ chuyển đổi này: ghi xuống DB luôn ở UTC, đọc lên luôn đánh dấu UTC
+        // → JSON có 'Z' → IOC, dòng thời gian, chat, snippet... hiển thị đúng giờ.
+        // ─────────────────────────────────────────────────
+        var utcConverter = new ValueConverter<DateTime, DateTime>(
+            v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+        var utcNullableConverter = new ValueConverter<DateTime?, DateTime?>(
+            v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v.Value : v.Value.ToUniversalTime()) : v,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
+        foreach (var entityType in b.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(DateTime))
+                    property.SetValueConverter(utcConverter);
+                else if (property.ClrType == typeof(DateTime?))
+                    property.SetValueConverter(utcNullableConverter);
+            }
+        }
     }
 }

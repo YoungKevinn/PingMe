@@ -1,6 +1,47 @@
 # PingMe
 
-Ứng dụng chat realtime dành cho nhóm bảo mật / pentest, xây dựng trên ASP.NET Core 9 + Blazor WebAssembly + SignalR + MySQL.
+Ứng dụng chat realtime cho nhóm bảo mật / pentest, xây dựng theo **mô hình MVC** trên **ASP.NET Core 9** + **EF Core 8 (MySQL)** + **SignalR**.
+
+> Toàn bộ ứng dụng nằm trong **một project ASP.NET Core MVC duy nhất** (`PingMe/`): Controller trả về View (`.cshtml`), kèm một lớp **Web API** (`/api/...`) và **SignalR Hub** để render động & realtime phía client bằng JavaScript thuần.
+
+---
+
+## Mục lục
+- [Kiến trúc MVC](#kiến-trúc-mvc)
+- [Tech Stack](#tech-stack)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Yêu cầu](#yêu-cầu)
+- [Cài đặt & Chạy](#cài-đặt--chạy)
+- [Tính năng](#tính-năng)
+- [API & SignalR](#api--signalr)
+
+---
+
+## Kiến trúc MVC
+
+Dự án tuân thủ mô hình **Model – View – Controller** của ASP.NET Core:
+
+| Tầng | Vị trí | Vai trò |
+|---|---|---|
+| **Model** | `Models/` | Thực thể domain (User, Group, Message, IocIndicator, PentestFinding…) |
+| **View** | `Views/**/*.cshtml` | Giao diện Razor + layout (`Views/Shared/_Layout.cshtml`) |
+| **Controller (MVC)** | `MvcControllers/` | Trả về View cho từng trang (Account, Chat, Groups, Ioc, Pentest…) |
+| **Controller (API)** | `Controllers/` | REST API trả JSON (`/api/...`) cho client |
+| **ViewModel / DTO** | `ViewModels/`, `DTOs/` | Dữ liệu truyền giữa các tầng |
+| **Service** | `Services/` | Toàn bộ logic nghiệp vụ (không nằm ở Controller/View) |
+| **Data** | `Data/AppDbContext.cs` | Tầng truy cập dữ liệu (EF Core) |
+| **Realtime** | `Hubs/ChatHub.cs` | SignalR cho tin nhắn/poll/typing… thời gian thực |
+
+**Định tuyến** (trong `Program.cs`):
+```csharp
+builder.Services.AddControllersWithViews();        // MVC
+app.MapControllerRoute("auth", "auth/{action=Login}", new { controller = "Account" });
+app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+app.MapControllers();                               // Web API (attribute routing)
+app.MapHub<ChatHub>("/hubs/chat");                 // SignalR
+```
+
+> View là Razor shell mỏng; phần nội dung động được render phía client bằng JS (`wwwroot/js/*.js`) gọi Web API + SignalR. Đây là MVC kết hợp client-side rendering (kiểu AJAX), không phải Blazor.
 
 ---
 
@@ -8,198 +49,144 @@
 
 | Layer | Công nghệ |
 |---|---|
-| Backend | ASP.NET Core 9, EF Core 8, Pomelo MySQL |
-| Frontend | Blazor WebAssembly (.NET 8), MudBlazor, Markdig |
+| Framework | ASP.NET Core 9 (MVC) |
+| ORM / DB | EF Core 8, Pomelo MySQL, MySQL 8+ |
 | Realtime | SignalR |
-| Auth | JWT Bearer |
-| Database | MySQL 8 |
+| Auth | JWT Bearer + Cookie |
+| Frontend | Razor Views (`.cshtml`) + JavaScript thuần + CSS |
 | Email | MailKit / MimeKit |
-| Media | SixLabors.ImageSharp |
-
----
-
-## Yêu cầu
-
-- [.NET 9 SDK](https://dotnet.microsoft.com/download)
-- MySQL 8 đang chạy trên `127.0.0.1:3306`
-- `dotnet-ef` tool: `dotnet tool install --global dotnet-ef`
-
----
-
-## Cài đặt & Chạy
-
-### 1. Clone
-
-```bash
-git clone https://github.com/YoungKevinn/PingMe.git
-cd PingMe
-```
-
-### 2. Tạo database
-
-Đăng nhập MySQL và chạy:
-
-```sql
-CREATE DATABASE IF NOT EXISTS dbweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-### 3. Cấu hình kết nối
-
-File `PingMe/appsettings.json` (đã được cấu hình sẵn):
-
-```json
-"ConnectionStrings": {
-  "DefaultConnection": "Server=127.0.0.1;Port=3306;Database=dbweb;User=root;Password=123456;..."
-}
-```
-
-Nếu credentials MySQL của bạn khác thì sửa `Password` và `User` tương ứng.
-
-### 4. Apply migration
-
-```bash
-cd PingMe
-dotnet ef database update
-```
-
-### 5. Chạy Backend
-
-```bash
-cd PingMe
-dotnet run
-```
-
-Backend mặc định lắng nghe tại `https://localhost:5001`.
-
-Swagger UI: `https://localhost:5001/swagger`
-
-### 6. Chạy Frontend (tab mới)
-
-```bash
-cd PingMe.Frontend
-dotnet run
-```
-
-Frontend mặc định tại `https://localhost:7xxx` (xem terminal output).
-
----
-
-## Tính năng
-
-### Chat & Messaging
-- Tin nhắn trực tiếp (DM) và nhóm realtime qua SignalR
-- Reply, forward, ghim tin nhắn
-- Chỉnh sửa & thu hồi tin nhắn, lịch sử chỉnh sửa
-- Đính kèm file / ảnh / voice
-- Emoji reactions
-- Tin nhắn tự hủy (TTL)
-- Đánh dấu đã đọc (read receipts)
-- Typing indicator
-
-### Bình chọn (Poll)
-- Tạo poll ngay trong chat (nút 🗳️ trong thanh nhập liệu)
-- Vote realtime — kết quả cập nhật cho tất cả thành viên ngay lập tức
-- Hỗ trợ chọn nhiều đáp án
-- Hiển thị thanh % tiến trình và tổng lượt bình chọn
-
-### Nhóm
-- Tạo / chỉnh sửa nhóm, quản lý thành viên
-- Phân quyền: Admin / CoAdmin / Member
-- Timeline nhóm, Group Task
-
-### Bảo mật
-- Xác thực JWT, quản lý session đa thiết bị
-- Block người dùng
-- Audit log
-- One-Time Secret (tin nhắn tự hủy sau khi xem một lần)
-- Code Snippet chia sẻ có TTL và token truy cập
-- Webhook tích hợp
-
-### Công cụ Pentest / Security
-- IOC Indicator tracker (IP, domain, hash, URL...)
-- Pentest Finding tracker (`/vuln` command)
-- Chat Reminder (`/reminder` command)
-- Group Task (`/task` command)
-
-### Khác
-- Tìm kiếm toàn cục
-- Lưu tin nhắn (saved messages)
-- Đổi nickname, đổi ảnh nền cuộc trò chuyện
-- Bạn bè (friend request / accept)
-- Hỗ trợ Markdown trong tin nhắn
+| Ảnh | SixLabors.ImageSharp |
+| Mật khẩu | BCrypt.Net |
+| Validation | FluentValidation |
+| API docs | Swashbuckle (Swagger) |
 
 ---
 
 ## Cấu trúc thư mục
 
 ```
-PingMe/
-├── PingMe/                  # Backend (ASP.NET Core API)
-│   ├── Controllers/         # REST API endpoints
-│   ├── Data/                # AppDbContext, migrations
-│   ├── DTOs/                # Request / Response objects
-│   ├── Hubs/                # SignalR ChatHub
-│   ├── Migrations/          # EF Core migrations
-│   ├── Models/              # Entity models
-│   ├── Services/            # Business logic
-│   ├── Middleware/          # JWT revocation, audit log
-│   ├── BackgroundJobs/      # Message expiry, reminder dispatch
-│   └── appsettings.json
-│
-└── PingMe.Frontend/         # Frontend (Blazor WASM)
-    ├── Components/
-    │   ├── Pages/           # Chat, Friends, Groups, Profile...
-    │   ├── Dialogs/         # Modal dialogs
-    │   ├── MessageList.razor
-    │   └── MessageInput.razor
-    ├── Models/              # DTO classes (mirror backend)
-    ├── Services/            # API calls, SignalR, cache
-    └── wwwroot/
+PingMe/                       # Project ASP.NET Core MVC (duy nhất)
+├── Controllers/              # Web API controllers (REST, trả JSON)
+├── MvcControllers/           # MVC controllers (trả về View)
+├── Views/                    # Razor Views (.cshtml)
+│   ├── Shared/_Layout.cshtml # Layout + sidebar + header
+│   ├── Chat/  Groups/  Ioc/  Pentest/  Search/  Snippets/ ...
+│   └── Shared/Dialogs/       # Partial views cho dialog
+├── Models/                   # Entity models (domain)
+├── ViewModels/               # ViewModel cho View
+├── DTOs/                     # Request/Response objects của API
+├── Services/                 # Logic nghiệp vụ
+├── Data/AppDbContext.cs      # EF Core DbContext
+├── Migrations/               # EF Core migrations
+├── Hubs/ChatHub.cs           # SignalR hub
+├── Middleware/               # JWT revocation, audit log…
+├── BackgroundJobs/           # Hết hạn tin nhắn, gửi reminder…
+├── Settings/                 # Option classes (Jwt, Email, FileStorage…)
+├── wwwroot/
+│   ├── js/                   # api.js, chat.js, loc.js, search.js… (render client)
+│   ├── css/                  # app.css, site.css
+│   └── uploads/              # File/ảnh người dùng tải lên
+├── Program.cs                # Cấu hình app, DI, routing
+└── appsettings.json          # Cấu hình (DB, JWT, Email…)
 ```
 
 ---
 
-## API Endpoints chính
+## Yêu cầu
 
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- **MySQL 8+** đang chạy tại `127.0.0.1:3306`
+- (Tùy chọn) `dotnet-ef`: `dotnet tool install --global dotnet-ef`
+
+---
+
+## Cài đặt & Chạy
+
+### 1. Tạo database
+```sql
+CREATE DATABASE IF NOT EXISTS dbweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 2. Cấu hình kết nối
+Sửa `PingMe/appsettings.json` (và `appsettings.Development.json` khi chạy môi trường Development) cho khớp MySQL của bạn:
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=127.0.0.1;Port=3306;Database=dbweb;User=root;Password=123456;CharSet=utf8mb4;AllowPublicKeyRetrieval=True;SslMode=None;"
+}
+```
+> ⚠️ Khi chạy bằng Visual Studio / `dotnet run` (mặc định môi trường **Development**), file `appsettings.Development.json` sẽ **ghi đè** connection string — nhớ chỉnh cả file này.
+
+### 3. Áp dụng migration
+```bash
+cd PingMe
+dotnet ef database update
+```
+
+### 4. Chạy ứng dụng
+```bash
+cd PingMe
+dotnet run
+```
+- Ứng dụng: **https://localhost:5001** (hoặc http://localhost:5000)
+- Swagger UI: **https://localhost:5001/swagger**
+
+> Chỉ có **một** ứng dụng để chạy — không có project frontend riêng.
+
+---
+
+## Tính năng
+
+### Chat & Messaging
+- DM và chat nhóm realtime (SignalR)
+- Reply, forward, ghim tin nhắn
+- Sửa & thu hồi tin nhắn + lịch sử chỉnh sửa
+- Đính kèm file / ảnh / voice
+- Emoji reactions, typing indicator, read receipts
+- Tin nhắn tự hủy (TTL), gửi code snippet, lệnh slash (`/ioc`, `/vuln`, `/task`, `/reminder`, `/snippet`)
+- Bình chọn (Poll) realtime ngay trong chat
+
+### Nhóm
+- Tạo / sửa nhóm, đổi tên & ảnh nhóm
+- Phân quyền **Admin / CoAdmin / Member**; kick, đổi vai trò
+- **Giải tán nhóm** (Admin/CoAdmin); rời nhóm tự chuyển quyền Admin
+- Timeline nhóm, Group Task
+
+### Bảo mật & Pentest
+- Xác thực JWT + Cookie, quản lý phiên đa thiết bị
+- Block người dùng, audit log
+- IOC tracker (IP / domain / hash / URL / CVE)
+- Pentest Finding tracker, Chat Reminder
+- One-Time Secret, Webhook, Code Snippet có TTL & token chia sẻ
+
+### Khác
+- Tìm kiếm toàn cục (tin nhắn, người dùng, nhóm, snippet, IOC, finding, task, file)
+- Lưu tin nhắn, đổi nickname, đổi ảnh nền hội thoại
+- Bạn bè (kết bạn / chấp nhận)
+- Hồ sơ cá nhân, đổi mật khẩu
+- **Đa ngôn ngữ vi/en** (nút quả địa cầu), Markdown trong tin nhắn
+
+---
+
+## API & SignalR
+
+### API endpoints chính
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| POST | `/api/auth/register` | Đăng ký |
-| POST | `/api/auth/login` | Đăng nhập |
-| GET | `/api/messages/dm/{peerId}` | Lấy DM messages |
-| GET | `/api/messages/group/{groupId}` | Lấy group messages |
-| POST | `/api/messages` | Gửi tin nhắn |
-| POST | `/api/messages/upload` | Upload file |
-| POST | `/api/polls` | Tạo poll |
-| POST | `/api/polls/{id}/vote` | Vote |
-| DELETE | `/api/polls/{id}/vote` | Bỏ vote |
-| POST | `/api/groups` | Tạo nhóm |
-| GET | `/api/friends` | Danh sách bạn bè |
-| GET | `/api/search` | Tìm kiếm |
+| POST | `/api/auth/register` · `/api/auth/login` | Đăng ký / Đăng nhập |
+| GET | `/api/messages/dm/{peerId}` · `/api/messages/group/{groupId}` | Lấy tin nhắn |
+| POST | `/api/messages` · `/api/messages/upload` | Gửi tin nhắn / Upload file |
+| POST | `/api/polls` · `/api/polls/{id}/vote` | Tạo poll / Vote |
+| POST/DELETE | `/api/groups` · `/api/groups/{id}/leave` · `/api/groups/{id}` | Tạo / Rời / Giải tán nhóm |
+| GET | `/api/iocs` · `/api/snippets` · `/api/search` | IOC / Snippet / Tìm kiếm |
 
-Xem đầy đủ tại `https://localhost:5001/swagger`.
+> Danh sách đầy đủ: **`/swagger`**.
+
+### SignalR events (Server → Client)
+`ReceiveMessage`, `MessageEdited`, `MessageDeleted`, `MessageReactionUpdated`, `MessagePinned`, `MessageRead`, `PollVoteUpdated`, `UserStatusChanged`, `UserTyping`, `GroupDeleted`, `GroupMemberKicked`, `IncomingCall`.
 
 ---
 
-## SignalR Events
-
-| Event | Chiều | Mô tả |
-|---|---|---|
-| `ReceiveMessage` | Server → Client | Tin nhắn mới |
-| `MessageEdited` | Server → Client | Tin nhắn được sửa |
-| `MessageDeleted` | Server → Client | Tin nhắn bị xóa |
-| `MessageReactionUpdated` | Server → Client | Reaction thay đổi |
-| `MessagePinned` | Server → Client | Ghim / bỏ ghim |
-| `MessageRead` | Server → Client | Read receipt |
-| `PollVoteUpdated` | Server → Client | Kết quả poll cập nhật |
-| `UserStatusChanged` | Server → Client | Online / offline |
-| `UserTyping` | Server → Client | Đang gõ... |
-| `IncomingCall` | Server → Client | Cuộc gọi đến |
-
----
-
-## Lưu ý
-
-- File upload tối đa **25 MB**
-- Tin nhắn văn bản tối đa **4000 ký tự**
-- Poll tối đa **10 lựa chọn**
-- Khi chạy lần đầu, backend tự tạo bảng nếu dùng `dotnet ef database update`
+## Ghi chú
+- Thời gian được lưu **UTC** trong DB và tự chuyển sang giờ địa phương ở client (bộ chuyển đổi UTC toàn cục trong `AppDbContext`).
+- File tải lên nằm ở `wwwroot/uploads/`. Giới hạn mặc định: file ≤ **25 MB**, tin nhắn văn bản ≤ **4000 ký tự**, poll ≤ **10 lựa chọn**.
+- Cấu hình DB / JWT / Email đặt trong `appsettings.json`.

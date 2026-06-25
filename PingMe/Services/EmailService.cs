@@ -18,30 +18,51 @@ public class EmailService : IEmailService
     private readonly IConfiguration _config;
     private readonly ILogger<EmailService> _logger;
     private readonly PingMe.Settings.EmailSettings _settings;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public EmailService(IConfiguration config, ILogger<EmailService> logger, Microsoft.Extensions.Options.IOptions<PingMe.Settings.EmailSettings> settings)
+    public EmailService(IConfiguration config, ILogger<EmailService> logger, Microsoft.Extensions.Options.IOptions<PingMe.Settings.EmailSettings> settings, IHttpContextAccessor httpContextAccessor)
     {
         _config = config;
         _logger = logger;
         _settings = settings.Value;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetToken)
     {
-        var resetUrl = $"http://localhost:5173/reset-password?token={resetToken}";
+        var ctx = _httpContextAccessor.HttpContext;
+        var baseUrl = ctx is not null
+            ? $"{ctx.Request.Scheme}://{ctx.Request.Host}"
+            : "http://localhost:5001";
+
+        var resetUrl = $"{baseUrl}/auth/reset-password?token={resetToken}";
 
         var body = $"""
-            <div style="font-family:sans-serif;max-width:480px;margin:auto">
-              <h2 style="color:#534AB7">🔐 Đặt lại mật khẩu PingMe</h2>
-              <p>Xin chào <strong>{toName}</strong>,</p>
-              <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn.</p>
-              <p>
-                <a href="{resetUrl}"
-                   style="background:#534AB7;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block">
-                  Đặt lại mật khẩu
-                </a>
-              </p>
-              <p style="color:#888;font-size:13px">Link có hiệu lực trong <strong>1 giờ</strong>. Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>
+            <div style="font-family:'Inter',sans-serif;max-width:520px;margin:auto;color:#1e293b;">
+              <div style="background:linear-gradient(135deg,#1D4ED8,#2563EB);padding:28px 32px;border-radius:12px 12px 0 0;">
+                <h2 style="margin:0;color:white;font-size:1.3rem;font-weight:800;">🔐 PingMe — Đặt lại mật khẩu</h2>
+              </div>
+              <div style="background:#ffffff;padding:28px 32px;border:1px solid #e2e8f0;border-top:none;">
+                <p>Xin chào <strong>{toName}</strong>,</p>
+                <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản <strong>{toEmail}</strong>.</p>
+                <p>Bấm vào nút bên dưới để đặt mật khẩu mới:</p>
+                <div style="text-align:center;margin:28px 0;">
+                  <a href="{resetUrl}"
+                     style="background:#2563EB;color:#fff;padding:14px 32px;border-radius:8px;
+                            text-decoration:none;font-weight:700;font-size:1rem;display:inline-block;">
+                    Đặt lại mật khẩu
+                  </a>
+                </div>
+                <p style="color:#64748b;font-size:0.85rem;">
+                  Link có hiệu lực trong <strong>1 giờ</strong>.<br/>
+                  Nếu bạn không yêu cầu, hãy bỏ qua email này — tài khoản vẫn an toàn.
+                </p>
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;"/>
+                <p style="color:#94a3b8;font-size:0.78rem;margin:0;">
+                  PingMe — DevSecOps Collaboration Platform<br/>
+                  Đừng trả lời email này.
+                </p>
+              </div>
             </div>
             """;
 
@@ -72,28 +93,20 @@ public class EmailService : IEmailService
         try
         {
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress(
-                _config["Email:FromName"]!,
-                _config["Email:FromAddress"]!));
+            message.From.Add(new MailboxAddress("PingMe", _settings.SenderEmail));
             message.To.Add(new MailboxAddress(toName, toEmail));
             message.Subject = subject;
             message.Body    = new TextPart("html") { Text = htmlBody };
 
             using var smtp = new SmtpClient();
-            await smtp.ConnectAsync(
-                _config["Email:SmtpHost"]!,
-                int.Parse(_config["Email:SmtpPort"]!),
-                SecureSocketOptions.StartTls);
-            await smtp.AuthenticateAsync(
-                _config["Email:Username"]!,
-                _config["Email:Password"]!);
+            await smtp.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, SecureSocketOptions.StartTls);
+            await smtp.AuthenticateAsync(_settings.SenderEmail, _settings.SenderPassword);
             await smtp.SendAsync(message);
             await smtp.DisconnectAsync(true);
         }
         catch (Exception ex)
         {
-            // Log lỗi nhưng không throw — không để email fail chặn flow chính
-            _logger.LogWarning("Failed to send email to {Email}: {Error}", toEmail, ex.Message);
+            _logger.LogError("Failed to send email to {Email}: {Error}", toEmail, ex.Message);
         }
     }
 

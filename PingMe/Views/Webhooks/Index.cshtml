@@ -1,0 +1,262 @@
+@{
+    ViewData["Title"] = "Webhooks - PingMe";
+}
+
+<style>
+    .pm-wh-page { padding: 26px 28px 40px; background: var(--mud-palette-background); min-height: 100%; }
+    .pm-wh-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 20px; }
+    .pm-wh-header h2 { margin: 0; font-size: 1.6rem; font-weight: 900; color: var(--mud-palette-text-primary); }
+    .pm-wh-header p { margin: 4px 0 0; color: var(--mud-palette-text-secondary); font-size: .9rem; }
+
+    .pm-wh-field { display: flex; flex-direction: column; gap: 6px; }
+    .pm-wh-field label { font-size: .78rem; font-weight: 700; color: var(--mud-palette-text-secondary); }
+    .pm-wh-field input, .pm-wh-field select {
+        width: 100%; min-height: 44px; border-radius: 10px;
+        border: 1px solid var(--mud-palette-divider); background: var(--mud-palette-background);
+        color: var(--mud-palette-text-primary); padding: 0 14px; outline: none; font-size: .9rem;
+        box-sizing: border-box;
+    }
+    .pm-wh-field input:focus, .pm-wh-field select:focus {
+        border-color: var(--mud-palette-primary);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, .14);
+    }
+
+    .pm-wh-card {
+        background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-divider);
+        border-radius: 14px; padding: 18px 20px; margin-bottom: 12px;
+    }
+    .pm-wh-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .pm-wh-card-title { font-size: 1rem; font-weight: 700; margin: 0; }
+    .pm-wh-card-url { font-size: .8rem; color: var(--mud-palette-text-secondary); word-break: break-all; margin: 4px 0 0; font-family: monospace; }
+    .pm-wh-card-actions { display: flex; gap: 8px; align-items: center; }
+
+    .pm-wh-badge-active  { background: rgba(34,197,94,.15); color: #16a34a; padding: 2px 10px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+    .pm-wh-badge-inactive { background: rgba(100,116,139,.12); color: var(--mud-palette-text-secondary); padding: 2px 10px; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+
+    .pm-wh-token-box { background: var(--mud-palette-background); border: 1px solid var(--mud-palette-divider); border-radius: 8px; padding: 10px 14px; font-family: monospace; font-size: .8rem; word-break: break-all; color: var(--mud-palette-text-secondary); margin-top: 10px; display: flex; gap: 10px; align-items: center; }
+    .pm-wh-modal-backdrop { position: fixed; inset: 0; z-index: 250000; background: rgba(2, 6, 23, .6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .pm-wh-modal { width: min(540px, 100%); background: var(--mud-palette-surface); border-radius: 18px; border: 1px solid var(--mud-palette-divider); box-shadow: 0 24px 80px rgba(0,0,0,.45); display: flex; flex-direction: column; }
+    .pm-wh-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px 12px; border-bottom: 1px solid var(--mud-palette-divider); }
+    .pm-wh-modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: 70vh; }
+    .pm-wh-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--mud-palette-divider); }
+    .pm-wh-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px; color: var(--mud-palette-text-secondary); gap: 10px; }
+</style>
+
+<div class="pm-wh-page">
+    <div class="pm-wh-header">
+        <div>
+            <h2>🔗 Webhooks</h2>
+            <p>Kết nối PingMe với các dịch vụ bên ngoài qua webhook URL</p>
+        </div>
+        <button type="button" onclick="pmWh.openCreate()"
+                class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple"
+                style="height:40px;padding:0 18px;font-weight:600;white-space:nowrap;">
+            <span class="mud-button-label">+ Thêm webhook</span>
+        </button>
+    </div>
+
+    <!-- Group filter -->
+    <div style="margin-bottom:20px;max-width:320px;">
+        <div class="pm-wh-field">
+            <label>Nhóm</label>
+            <select id="wh-group-filter" onchange="pmWh.onGroupChange()">
+                <option value="">-- Chọn nhóm --</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Webhook list -->
+    <div id="wh-list">
+        <div class="pm-wh-empty">
+            <svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:currentColor;opacity:.3;"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+            <p style="font-weight:700;">Chọn nhóm để xem webhooks</p>
+        </div>
+    </div>
+</div>
+
+<!-- Create webhook modal -->
+<div id="wh-modal" class="pm-wh-modal-backdrop" style="display:none;" onclick="if(event.target===this)pmWh.closeCreate()">
+    <div class="pm-wh-modal" onclick="event.stopPropagation()">
+        <div class="pm-wh-modal-header">
+            <h6 style="margin:0;font-weight:800;font-size:1.1rem;">Thêm webhook mới</h6>
+            <button type="button" onclick="pmWh.closeCreate()" class="mud-button-root mud-icon-button mud-ripple mud-icon-button-size-small" style="color:var(--mud-palette-text-secondary);">
+                <span class="mud-icon-button-label">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </span>
+            </button>
+        </div>
+        <div class="pm-wh-modal-body">
+            <div class="pm-wh-field">
+                <label>Nhóm *</label>
+                <select id="wh-c-group">
+                    <option value="">-- Chọn nhóm --</option>
+                </select>
+            </div>
+            <div class="pm-wh-field">
+                <label>Tên webhook *</label>
+                <input type="text" id="wh-c-name" placeholder="VD: CI/CD Alert, Monitoring..." />
+            </div>
+            <div style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2);border-radius:10px;padding:12px 14px;font-size:.82rem;color:var(--mud-palette-text-secondary);">
+                <strong style="color:var(--mud-palette-text-primary);">Cách dùng:</strong><br>
+                Sau khi tạo, gửi POST request tới:<br>
+                <code style="background:var(--mud-palette-background);padding:2px 6px;border-radius:4px;font-size:.78rem;">/api/webhooks/incoming/{token}</code><br>
+                với header <code>X-PingMe-Signature: sha256=HMAC</code> và body:<br>
+                <code style="background:var(--mud-palette-background);padding:2px 6px;border-radius:4px;font-size:.78rem;">{"content": "Nội dung", "username": "Bot tên"}</code>
+            </div>
+        </div>
+        <div class="pm-wh-modal-footer">
+            <button type="button" onclick="pmWh.closeCreate()" class="mud-button-root mud-button mud-button-text mud-button-text-default mud-ripple" style="height:38px;padding:0 16px;">
+                <span class="mud-button-label">Hủy</span>
+            </button>
+            <button type="button" id="wh-create-btn" onclick="pmWh.submitCreate()" class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple" style="height:38px;padding:0 18px;font-weight:600;">
+                <span class="mud-button-label">Tạo webhook</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const pmWh = {
+    groups: [],
+    webhooks: [],
+
+    async init() {
+        const groups = await pmApi.get('/api/groups') || [];
+        this.groups = groups;
+        const sel = document.getElementById('wh-group-filter');
+        const cSel = document.getElementById('wh-c-group');
+        groups.forEach(g => {
+            const o1 = new Option(g.name, g.id);
+            const o2 = new Option(g.name, g.id);
+            sel.appendChild(o1);
+            cSel.appendChild(o2);
+        });
+    },
+
+    async onGroupChange() {
+        const groupId = document.getElementById('wh-group-filter').value;
+        if (!groupId) {
+            document.getElementById('wh-list').innerHTML = `<div class="pm-wh-empty">
+                <svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:currentColor;opacity:.3;"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                <p style="font-weight:700;">Chọn nhóm để xem webhooks</p></div>`;
+            return;
+        }
+        const list = document.getElementById('wh-list');
+        list.innerHTML = '<div style="text-align:center;padding:32px;"><div class="mud-progress-circular mud-progress-circular-indeterminate" style="width:28px;height:28px;margin:0 auto;"><svg viewBox="22 22 44 44"><circle class="mud-progress-circular-circle" cx="44" cy="44" r="20.2" fill="none" stroke-width="3.6"></circle></svg></div></div>';
+        const data = await pmApi.get(`/api/webhooks/group/${groupId}`) || [];
+        this.webhooks = data;
+        this.renderList(data);
+    },
+
+    renderList(items) {
+        const list = document.getElementById('wh-list');
+        if (!items.length) {
+            list.innerHTML = `<div class="pm-wh-empty">
+                <svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:currentColor;opacity:.25;"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+                <p style="font-weight:700;">Nhóm này chưa có webhook nào</p>
+                <p style="font-size:.85rem;">Nhấn "Thêm webhook" để tạo mới</p></div>`;
+            return;
+        }
+        const origin = window.location.origin;
+        list.innerHTML = items.map(w => `
+            <div class="pm-wh-card">
+                <div class="pm-wh-card-header">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                            <span class="pm-wh-card-title">${pmEscape(w.name)}</span>
+                            <span class="${w.isActive ? 'pm-wh-badge-active' : 'pm-wh-badge-inactive'}">${w.isActive ? 'Hoạt động' : 'Tắt'}</span>
+                        </div>
+                        <div style="font-size:.75rem;color:var(--mud-palette-text-secondary);margin-top:2px;">Tạo lúc ${new Date(w.createdAt).toLocaleDateString('vi-VN')}</div>
+                    </div>
+                    <div class="pm-wh-card-actions">
+                        <button type="button" onclick="pmWh.toggle(${w.id}, ${w.isActive})"
+                                class="mud-button-root mud-button mud-button-outlined ${w.isActive ? 'mud-button-outlined-error' : 'mud-button-outlined-primary'} mud-ripple"
+                                style="height:32px;padding:0 12px;font-size:.82rem;font-weight:600;">
+                            <span class="mud-button-label">${w.isActive ? 'Tắt' : 'Bật'}</span>
+                        </button>
+                        <button type="button" onclick="pmWh.delete(${w.id})"
+                                class="mud-button-root mud-button mud-button-text mud-button-text-error mud-ripple"
+                                style="height:32px;padding:0 10px;font-size:.82rem;">
+                            <span class="mud-button-label">Xóa</span>
+                        </button>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+                    <div>
+                        <div style="font-size:.72rem;font-weight:700;color:var(--mud-palette-text-secondary);margin-bottom:3px;">ENDPOINT URL</div>
+                        <div class="pm-wh-token-box">
+                            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;">${pmEscape(origin)}/api/webhooks/incoming/${pmEscape(w.token)}</span>
+                            <button type="button" onclick="navigator.clipboard.writeText('${pmEscape(origin)}/api/webhooks/incoming/${pmEscape(w.token)}').then(()=>pmToast.success('Đã copy URL'))"
+                                    style="background:none;border:none;cursor:pointer;color:var(--mud-palette-primary);padding:2px;flex-shrink:0;" title="Copy">
+                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size:.72rem;font-weight:700;color:var(--mud-palette-text-secondary);margin-bottom:3px;">SECRET (HMAC-SHA256)</div>
+                        <div class="pm-wh-token-box">
+                            <span id="wh-secret-${w.id}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;filter:blur(4px);" onclick="this.style.filter='none'" title="Click để xem">••••••••••••••••</span>
+                            <span style="display:none;" id="wh-secret-val-${w.id}">${pmEscape(w.secret)}</span>
+                            <button type="button" onclick="document.getElementById('wh-secret-${w.id}').textContent=document.getElementById('wh-secret-val-${w.id}').textContent;document.getElementById('wh-secret-${w.id}').style.filter='none'"
+                                    style="background:none;border:none;cursor:pointer;color:var(--mud-palette-text-secondary);padding:2px;flex-shrink:0;" title="Hiển thị">
+                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                            </button>
+                            <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('wh-secret-val-${w.id}').textContent).then(()=>pmToast.success('Đã copy secret'))"
+                                    style="background:none;border:none;cursor:pointer;color:var(--mud-palette-primary);padding:2px;flex-shrink:0;" title="Copy">
+                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`).join('');
+    },
+
+    openCreate() {
+        const groupId = document.getElementById('wh-group-filter').value;
+        if (groupId) document.getElementById('wh-c-group').value = groupId;
+        document.getElementById('wh-c-name').value = '';
+        document.getElementById('wh-modal').style.display = 'flex';
+        setTimeout(() => document.getElementById('wh-c-name').focus(), 50);
+    },
+
+    closeCreate() {
+        document.getElementById('wh-modal').style.display = 'none';
+    },
+
+    async submitCreate() {
+        const groupId = document.getElementById('wh-c-group').value;
+        const name = document.getElementById('wh-c-name').value.trim();
+        if (!groupId) { pmToast.error('Vui lòng chọn nhóm'); return; }
+        if (!name) { pmToast.error('Vui lòng nhập tên webhook'); return; }
+        const btn = document.getElementById('wh-create-btn');
+        btn.disabled = true;
+        const r = await pmApi.post('/api/webhooks', { groupId: parseInt(groupId), name });
+        btn.disabled = false;
+        if (r) {
+            pmToast.success('Đã tạo webhook');
+            this.closeCreate();
+            document.getElementById('wh-group-filter').value = groupId;
+            await this.onGroupChange();
+        }
+    },
+
+    async toggle(webhookId, currentlyActive) {
+        const r = await pmApi.patch(`/api/webhooks/${webhookId}/toggle?active=${!currentlyActive}`, {});
+        if (r !== null) {
+            pmToast.success(currentlyActive ? 'Đã tắt webhook' : 'Đã bật webhook');
+            await this.onGroupChange();
+        }
+    },
+
+    async delete(webhookId) {
+        if (!confirm('Bạn có chắc muốn xóa webhook này?')) return;
+        await pmApi.delete(`/api/webhooks/${webhookId}`);
+        pmToast.success('Đã xóa webhook');
+        await this.onGroupChange();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => pmWh.init());
+</script>
+}

@@ -545,6 +545,9 @@ namespace PingMe.Migrations
                     b.Property<int?>("GroupId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<int?>("MessageId")
                         .HasColumnType("int");
 
@@ -679,6 +682,8 @@ namespace PingMe.Migrations
 
                     b.HasIndex("GroupId");
 
+                    b.HasIndex("IsDeleted");
+
                     b.HasIndex("ReceiverId");
 
                     b.HasIndex("ReplyToMessageId");
@@ -686,6 +691,10 @@ namespace PingMe.Migrations
                     b.HasIndex("SenderId");
 
                     b.HasIndex("SnippetId");
+
+                    b.HasIndex("ReceiverId", "GroupId");
+
+                    b.HasIndex("SenderId", "ReceiverId", "GroupId");
 
                     b.ToTable("Messages");
                 });
@@ -950,6 +959,9 @@ namespace PingMe.Migrations
                     b.Property<string>("HttpMethod")
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<string>("Payload")
                         .HasColumnType("longtext");
